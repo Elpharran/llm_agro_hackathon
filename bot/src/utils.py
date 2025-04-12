@@ -181,7 +181,7 @@ class MistralAPIInference:
 
                 return prediction
             except mistralai.models.sdkerror.SDKError:
-                logger.info('Rate limit exceeded. Sleeping for 60.')
+                logger.warning('Rate limit exceeded. Sleeping for 60.')
                 time.sleep(60) 
                 prediction = (
                     self.mistral_client.chat.complete(
