@@ -106,7 +106,7 @@ class AgroReportTelegramBot:
         Sends the disallowed message to the user.
         """
         await update.effective_message.reply_text(
-            text="Извините, вам запрещено ❌ использовать этого бота. Запросите доступ у администратора @elpharran",
+            text=get_reply_text("disallowed"),
             disable_web_page_preview=True,
         )
 
@@ -115,13 +115,20 @@ class AgroReportTelegramBot:
         await query.answer()
 
         if query.data == "final_yes":
+            corrected_entries = context.user_data.get("corrected_entries")
+            if corrected_entries is not None:
+
+                # TODO: сохранялка отчетов с обновленной даткой
+
+                pass
+
+            # TODO сохранялка отчетов обычная
+
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="Отчёт записан в сводную таблицу ✅",
                 reply_to_message_id=query.message.message_id,
             )
-
-            # TODO сохранялка отчетов
 
         elif query.data == "final_no":
             await context.bot.send_message(
@@ -130,50 +137,109 @@ class AgroReportTelegramBot:
                 reply_to_message_id=query.message.message_id,
             )
 
+        context.user_data.pop("corrected_entries", None)
         await query.edit_message_reply_markup(reply_markup=None)
 
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """
-        React to incoming messages and respond accordingly.
-        """
+        self.has_attachment = False
+
         if update.edited_message or not update.message or update.message.via_bot:
             return
 
         if not await self.check_allowed(update, context):
             return
 
-        chat_id = update.effective_chat.id
-        query = message_text(update) or ""
-        sent_message = None
+        # Проверка состояния исправления
+        if context.user_data.get("awaiting_correction"):
+            user_input = update.message.text
+            if not user_input:
+                await update.message.reply_text("Пожалуйста, введите значение.")
+                return
 
+            user_input = user_input.strip()
+            correction_data = context.user_data.get("corrections")
+            if not correction_data:
+                context.user_data.pop("awaiting_correction", None)
+                return
+
+            current_index = correction_data["current_index"]
+            queue = correction_data["queue"]
+            entries = correction_data["entries"]
+
+            if current_index >= len(queue):
+                context.user_data.pop("awaiting_correction", None)
+                return
+
+            entry_idx, key = queue[current_index]
+
+            # Обновляем запись
+            entries[entry_idx][key] = user_input
+            correction_data["current_index"] += 1
+
+            # Если остались исправления
+            if correction_data["current_index"] < len(queue):
+                next_entry_idx, next_key = queue[correction_data["current_index"]]
+                entry_number = next_entry_idx + 1
+                await update.message.reply_text(
+                    f"Введите значение для **'{next_key}'** в записи **{entry_number}:**",
+                    parse_mode=constants.ParseMode.MARKDOWN,
+                )
+            else:
+                # Все исправления завершены
+                context.user_data.pop("awaiting_correction", None)
+                context.user_data["corrected_entries"] = entries
+                # Форматируем отчет
+                formatted_report = (
+                    "<pre>"
+                    + "\n\n".join(
+                        [
+                            pd.DataFrame([entry]).to_string(index=False)
+                            for entry in entries
+                        ]
+                    )
+                    + "</pre>"
+                )
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "Финальный отчёт ✅", callback_data="final_yes"
+                        ),
+                        InlineKeyboardButton(
+                            "Промежуточный отчёт ⚠️", callback_data="final_no"
+                        ),
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    formatted_report, reply_markup=reply_markup, parse_mode="HTML"
+                )
+            return
+
+        # Обработка входящих сообщений
+        chat_id = update.effective_chat.id
+        query_text = message_text(update) or ""
+        sent_message = None
         logger.info(
             f"New message received from user {update.message.from_user.name} (id: {update.message.from_user.id})"
         )
-        chat_id = update.effective_chat.id
 
-        sent_message = None
+        # Обработка вложений
         file = update.message.document
         photo = update.message.photo
         if file or photo:
+            self.has_attachment = True
             sent_message = await update.effective_message.reply_text(
                 "Файл обрабатывается 🤖", reply_to_message_id=update.message.message_id
             )
-            file_name, file_content = await manage_attachment(
-                self.model, update, context, file, photo
-            )
-
-            if file_content == "Данный тип файла не поддерживается.":
-                await edit_message_with_retry(
-                    context,
-                    chat_id,
-                    str(sent_message.message_id),
-                    "Данный тип файла не поддерживается.",
+            try:
+                file_name, file_content = await manage_attachment(
+                    self.model, update, context, file, photo
                 )
-                return
-            if file_content in [
-                "К сожалению, модель не может обработать данный файл 😢",
-                "Файл не загружен",
-            ]:
+                query_text = (
+                    f"""[Отчет из {file_name}]:\n{file_content}\n\n{query_text}"""
+                )
+
+            except Exception:
                 await edit_message_with_retry(
                     context,
                     chat_id,
@@ -182,11 +248,10 @@ class AgroReportTelegramBot:
                 )
                 return
 
-            query = f"""[Отчет из {file_name}]:\n{file_content}\n\n{query}"""
-
+        # Формирование отчета
         try:
             await update.effective_message.reply_chat_action(
-                action=constants.ChatAction.TYPING,
+                constants.ChatAction.TYPING
             )
             if not sent_message:
                 sent_message = await update.effective_message.reply_text(
@@ -199,40 +264,114 @@ class AgroReportTelegramBot:
                     str(sent_message.message_id),
                     "Формирую отчёт 📝",
                 )
-            response = self.builder.build(query)
+
+            response = self.builder.build(query_text)
+            formatted_report = ""
+
             if response != ERROR_TEXT:
+
                 logger.info("Report ready!")
-                formatted_report = (
-                    f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
-                )
-                keyboard = [
-                    [
-                        InlineKeyboardButton("Финальный отчёт ✅", callback_data="final_yes"),
-                        InlineKeyboardButton("Промежуточный отчёт ⚠️", callback_data="final_no"),
+                if self.has_attachment:
+                    # Проверка на необходимость исправлений
+                    corrections_queue = []
+                    for entry_idx, entry in enumerate(response):
+                        for key, value in entry.items():
+                            if key in [
+                                "За день, га",
+                                "С начала операции, га",
+                            ]:
+                                corrections_queue.append((entry_idx, key))
+                            elif key in [
+                                "Вал за день, ц",
+                                "Вал с начала, ц",
+                            ]:
+                                if entry["Операция"] == "Уборка":
+                                    corrections_queue.append((entry_idx, key))
+                            else:
+                                if value == "Не определено":
+                                    corrections_queue.append((entry_idx, key))
+
+                    if corrections_queue:
+                        context.user_data["corrections"] = {
+                            "entries": response,
+                            "queue": corrections_queue,
+                            "current_index": 0,
+                        }
+                        context.user_data["awaiting_correction"] = True
+                        first_entry_idx, first_key = corrections_queue[0]
+                        await update.message.reply_text(
+                            f"Введите значение для **'{first_key}'** в записи **{first_entry_idx + 1}:**",
+                            parse_mode=constants.ParseMode.MARKDOWN,
+                        )
+                        return
+
+                    # Если исправления не требуются
+                    formatted_report = (
+                        "<pre>"
+                        + "\n\n".join(
+                            [
+                                pd.DataFrame([entry]).to_string(index=False)
+                                for entry in response
+                            ]
+                        )
+                        + "</pre>"
+                    )
+                    keyboard = [
+                        [
+                            InlineKeyboardButton(
+                                "Финальный отчёт ✅", callback_data="final_yes"
+                            ),
+                            InlineKeyboardButton(
+                                "Промежуточный отчёт ⚠️", callback_data="final_no"
+                            ),
+                        ]
                     ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text(
+                        formatted_report, reply_markup=reply_markup, parse_mode="HTML"
+                    )
 
-                await edit_message_with_retry(
-                    context,
-                    chat_id,
-                    str(sent_message.message_id),
-                    formatted_report,
-                    html=True,
-                    reply_markup=reply_markup,
-                )
+                else:
+                    # Обработка отчетов без вложений
+                    formatted_report = (
+                        f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
+                    )
+                    keyboard = [
+                        [
+                            InlineKeyboardButton(
+                                "Финальный отчёт ✅", callback_data="final_yes"
+                            ),
+                            InlineKeyboardButton(
+                                "Промежуточный отчёт ⚠️", callback_data="final_no"
+                            ),
+                        ]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await edit_message_with_retry(
+                        context,
+                        chat_id,
+                        str(sent_message.message_id),
+                        formatted_report,
+                        html=True,
+                        reply_markup=reply_markup,
+                    )
 
+            #                 group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
+            # Исходный текст:
 
-        #                 group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
-        # Исходный текст:
+            # {query_text}"""
+            #                 await context.bot.send_message(
+            #                     chat_id=self.config["group_chat_id"],
+            #                     text=group_report,
+            #                     parse_mode=constants.ParseMode.HTML,
+            #                     disable_web_page_preview=True,
+            #                 )
+            else:
+                return ERROR_TEXT
 
-        # {query}"""
-        #                 await context.bot.send_message(
-        #                     chat_id=self.config["group_chat_id"],
-        #                     text=group_report,
-        #                     parse_mode=constants.ParseMode.HTML,
-        #                     disable_web_page_preview=True,
-        #                 )
+        except Exception as e:
+            logger.error(f"Ошибка: {str(e)}")
+            await update.message.reply_text(ERROR_TEXT)
 
         except Exception as e:
             logger.exception(f"{str(e)}")
@@ -276,7 +415,14 @@ class AgroReportTelegramBot:
         )
         application.add_handler(
             MessageHandler(
-                filters.TEXT & filters.ChatType.PRIVATE & (~filters.COMMAND),
+                (
+                    filters.TEXT
+                    | filters.FORWARDED
+                    | filters.PHOTO
+                    | filters.Document.ALL
+                )
+                & filters.ChatType.PRIVATE
+                & (~filters.COMMAND),
                 self.prompt,
             )
         )
