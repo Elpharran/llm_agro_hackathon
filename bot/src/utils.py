@@ -489,13 +489,8 @@ async def manage_attachment(
 
         return file_name, file_content
 
-    except ValueError:
-        return (
-            None,
-            "Данный тип файла не поддерживается.",
-        )
-    except RuntimeError:
-        return None, "К сожалению, модель не может обработать данный файл 😢"
+    except Exception:
+        raise
 
 
 def extract_file_content(file_path: str, file_extension: str) -> str:
