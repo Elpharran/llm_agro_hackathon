@@ -34,6 +34,8 @@ class OperationEntry(BaseModel):
     Культура: Optional[str] = None
     За_день_га: Optional[float] = Field(None, alias="За день, га")
     С_начала_операции_га: Optional[float] = Field(None, alias="С начала операции, га")
+    Вал_за_день_ц: Optional[float] = Field(None, alias="Вал за день, ц")
+    Вал_с_начала_ц: Optional[float] = Field(None, alias="Вал с начала, ц")
 
     @model_validator(mode="before")
     @classmethod
@@ -100,6 +102,7 @@ class ReportBuilder:
             report=str(data),
             field=field,
         )
+        print(prompt)
         return self._safe_predict_eval(prompt)
 
     def _correct_json(self, data: str) -> dict:
