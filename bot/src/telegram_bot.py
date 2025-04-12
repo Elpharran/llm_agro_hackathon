@@ -8,18 +8,21 @@ from src.utils import (
     edit_message_with_retry,
     error_handler,
     get_reply_text,
+    is_allowed,
     manage_attachment,
     message_text,
-    is_allowed,
 )
 from telegram import (
     BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     Update,
     constants,
 )
 from telegram.ext import (
     Application,
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -107,6 +110,28 @@ class AgroReportTelegramBot:
             disable_web_page_preview=True,
         )
 
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+
+        if query.data == "final_yes":
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="Отчёт записан в сводную таблицу ✅",
+                reply_to_message_id=query.message.message_id,
+            )
+
+            # TODO сохранялка отчетов
+
+        elif query.data == "final_no":
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="Отчёт не записан в сводную таблицу ⚠️",
+                reply_to_message_id=query.message.message_id,
+            )
+
+        await query.edit_message_reply_markup(reply_markup=None)
+
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         React to incoming messages and respond accordingly.
@@ -180,15 +205,26 @@ class AgroReportTelegramBot:
                 formatted_report = (
                     f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
                 )
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Финальный отчёт ✅", callback_data="final_yes"),
+                        InlineKeyboardButton("Промежуточный отчёт ⚠️", callback_data="final_no"),
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
                 await edit_message_with_retry(
                     context,
                     chat_id,
                     str(sent_message.message_id),
                     formatted_report,
                     html=True,
+                    reply_markup=reply_markup,
                 )
-        #                 group_report = f"""Отчет от {update.effective_user.full_name}:\n\n{formatted_report}
-        # Исходный текст отчёта:
+
+
+        #                 group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
+        # Исходный текст:
 
         # {query}"""
         #                 await context.bot.send_message(
@@ -243,6 +279,9 @@ class AgroReportTelegramBot:
                 filters.TEXT & filters.ChatType.PRIVATE & (~filters.COMMAND),
                 self.prompt,
             )
+        )
+        application.add_handler(
+            CallbackQueryHandler(self.button_callback, pattern="^final_")
         )
 
         application.add_error_handler(error_handler)
