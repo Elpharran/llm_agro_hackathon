@@ -89,21 +89,23 @@ class ReportBuilder:
         )
         self.model.set_generation_params(system_prompt=config["assistant_prompt"])
 
-    def _safe_predict_eval(self, prompt: str) -> dict:
-        response = self.model.predict(prompt)
-        return ast.literal_eval(response)
-
     def _correct_fields(self, field: str, data: dict) -> dict:
-        logger.warning("Correcting fields")
+        logger.warning(f"Correcting field {field}")
         logger.warning(data)
+        if field == "Операция":
+            allowed = ', '.join(allowed_entities["type"])
+        if field == "Культура":
+            allowed = ', '.join(allowed_entities["culture"])
+        if field == "Подразделение":
+            allowed = ', '.join(allowed_entities["division"])
         prompt = load_prompt(
             prompt_path="prompts/5. validation_fields.md",
             validation=True,
             report=str(data),
             field=field,
+            allowed=allowed,
         )
-        print(prompt)
-        return self._safe_predict_eval(prompt)
+        return self.model.predict(prompt)
 
     def _correct_json(self, data: str) -> dict:
         logger.warning("Correcting JSON structure")
@@ -113,7 +115,7 @@ class ReportBuilder:
             validation=True,
             report=data,
         )
-        return self._safe_predict_eval(prompt)
+        return self.model.predict(prompt)
 
     def _validate(self, report: str, field=None, initial=False) -> dict:
         try:
@@ -132,14 +134,16 @@ class ReportBuilder:
                 return OperationList.model_validate(correction).model_dump(
                     exclude_none=True
                 )
-            return OperationEntry(**correction).model_dump(exclude_none=True)
+            return OperationEntry(
+                **ast.literal_eval(clean_string(correction))
+            ).model_dump(exclude_none=True)
 
         except json.decoder.JSONDecodeError:
             correction = self._correct_json(report if initial else clean_string(report))
             if initial:
-                return OperationList.model_validate(correction).model_dump(
-                    exclude_none=True
-                )
+                return OperationList.model_validate(
+                    ast.literal_eval(clean_string(correction))
+                ).model_dump(exclude_none=True)
             return OperationEntry(**correction).model_dump(exclude_none=True)
 
         except Exception:
@@ -162,6 +166,7 @@ class ReportBuilder:
         if initial:
             prompt = load_prompt(prompt_path, definition=True)
             reports = self.model.predict(prompt, report_data)
+            logger.info(reports)
             return self._validate(reports, initial=initial, field=field)
         else:
             prompt = load_prompt(prompt_path)
