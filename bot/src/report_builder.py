@@ -90,14 +90,16 @@ class ReportBuilder:
         self.model.set_generation_params(system_prompt=config["assistant_prompt"])
 
     def _correct_fields(self, field: str, data: dict) -> dict:
-        logger.warning(f"Correcting field {field}")
+        logger.warning(f"🚩 Correcting field {field}")
         logger.warning(data)
+        
         if field == "Операция":
-            allowed = ', '.join(allowed_entities["type"])
+            allowed = ", ".join(allowed_entities["type"])
         if field == "Культура":
-            allowed = ', '.join(allowed_entities["culture"])
+            allowed = ", ".join(allowed_entities["culture"])
         if field == "Подразделение":
-            allowed = ', '.join(allowed_entities["division"])
+            allowed = ", ".join(allowed_entities["division"])
+
         prompt = load_prompt(
             prompt_path="prompts/5. validation_fields.md",
             validation=True,
@@ -108,7 +110,7 @@ class ReportBuilder:
         return self.model.predict(prompt)
 
     def _correct_json(self, data: str) -> dict:
-        logger.warning("Correcting JSON structure")
+        logger.warning("🚩 Correcting JSON structure")
         logger.warning(data)
         prompt = load_prompt(
             prompt_path="prompts/5. validation_json.md",
@@ -129,7 +131,7 @@ class ReportBuilder:
             return OperationEntry(**parsed).model_dump(exclude_none=True)
 
         except ValidationError:
-            correction = self._correct_fields(field, json.loads(clean_string(report)))
+            correction = self._correct_fields(field, parsed)
             if initial:
                 return OperationList.model_validate(correction).model_dump(
                     exclude_none=True
@@ -181,7 +183,7 @@ class ReportBuilder:
         ]
         result = report_data
         for prompt_path, field, initial in processing_steps:
-            logger.info(f"Processing {field if field else 'Вычисления'}")
+            logger.info(f"Processing field: {field}")
             try:
                 result = self._process_stage(result, prompt_path, field, initial)
             except Exception:
@@ -191,6 +193,8 @@ class ReportBuilder:
             item["Дата"] = item["Дата"].strftime("%d.%m.%Y")
             item["За день, га"] = item.pop("За_день_га")
             item["С начала операции, га"] = item.pop("С_начала_операции_га")
+            item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
+            item["Вал с начала, ц"] = item.pop("Вал_с_начала_ц")
             item.pop("Данные", None)
 
         return result
