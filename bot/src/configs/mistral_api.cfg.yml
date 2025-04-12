@@ -1,0 +1,7 @@
+mistral-large:
+  GENERATION_PARAMETERS:
+      temperature: 0
+      max_tokens: 128000
+      stop:
+      - '[INST]'
+      - '[/INST]'

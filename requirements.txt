@@ -1,0 +1,11 @@
+httpx~=0.28.1
+Markdown~=3.7.0
+mistralai~=1.3.1
+mistral_common~=1.5.4
+pydantic>=2.7.1,<3.0.0
+python_docx~=1.1.2
+python-dotenv~=1.0.1
+python-telegram-bot~=21.10
+PyYAML~=6.0.2
+requests~=2.32.1
+git+https://github.com/Elpharran/docling.git@docling-v2.5.2-ru
