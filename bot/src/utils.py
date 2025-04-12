@@ -157,7 +157,7 @@ class MistralAPIInference:
             The generated text response.
         """
         user_prompt = f"""{instruction}\n\n```{text}```""" if text else instruction
-        messages = []  
+        messages = []
         messages.append(dict(role="system", content=self.system_prompt))
         messages.append(dict(role="user", content=user_prompt))
 
@@ -260,6 +260,45 @@ def get_reply_text(key):
     return reply_messages[key]
 
 
+async def is_allowed(config, update: Update, context: CallbackContext) -> bool:
+    """
+    Checks if the user is allowed to use the bot.
+    """
+    # If allowed_user_ids is "*" in config, allow everyone
+    if config["allowed_user_ids"] == "*":
+        return True
+
+    user_id = update.message.from_user.id
+
+    if is_admin(config, user_id):
+        return True
+
+    if user_id in config["allowed_user_ids"].split(","):
+        return True
+
+    return False
+
+
+def is_admin(config, user_id: int, log_no_admin=False) -> bool:
+    """
+    Checks if the user is the admin of the bot.
+    The first user in the user list is the admin.
+    """
+    if config["admin_user_ids"] == "-":
+        if log_no_admin:
+            logger.warning("No admin user defined.")
+            logger.warning("No admin user defined.")
+        return False
+
+    admin_user_ids = config["admin_user_ids"].split(",")
+
+    # Check if user is in the admin user list
+    if str(user_id) in admin_user_ids:
+        return True
+
+    return False
+
+
 def markdown_to_string(file_path):
     """
     Reads a Markdown file and converts it into a formatted string.
@@ -315,13 +354,6 @@ def clean_string(json_string):
     cleaned_string = re.sub(r'\\([^"\\/bfnrt])', r"\\\\\1", cleaned_string)
     cleaned_string = re.sub(r"([}\]])\s*([{\[])", r"\1,\2", cleaned_string)
     return cleaned_string.strip()
-
-
-def send_telegram_message(chat_id, message):
-    url = f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message}
-    response = requests.post(url, json=payload)
-    return response.json()
 
 
 def message_text(update: Update, reset=False) -> str:

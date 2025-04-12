@@ -10,7 +10,7 @@ from src.utils import (
     get_reply_text,
     manage_attachment,
     message_text,
-    send_telegram_message,
+    is_allowed,
 )
 from telegram import (
     BotCommand,
@@ -57,6 +57,9 @@ class AgroReportTelegramBot:
         """
         Shows the help menu.
         """
+        if not await self.check_allowed(update, context):
+            return
+
         commands = self.commands
         commands_description = [
             f"/{command.command} - {command.description}" for command in commands
@@ -72,6 +75,38 @@ class AgroReportTelegramBot:
             disable_web_page_preview=True,
         )
 
+    async def check_allowed(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> bool:
+        """
+        Checks if the user is allowed to use the bot
+        :param update: Telegram update object
+        :param context: Telegram context object
+        :return: Boolean indicating if the user is allowed to use the bot
+        """
+        name = update.message.from_user.name
+        user_id = update.message.from_user.id
+
+        if not await is_allowed(self.config, update, context):
+            logger.warning(f"User {name} (id: {user_id}) is not allowed to use the bot")
+            await self.send_disallowed_message(update, context)
+            return False
+
+        return True
+
+    async def send_disallowed_message(
+        self, update: Update, _: ContextTypes.DEFAULT_TYPE
+    ):
+        """
+        Sends the disallowed message to the user.
+        """
+        await update.effective_message.reply_text(
+            text="Извините, вам запрещено ❌ использовать этого бота. Запросите доступ у администратора @elpharran",
+            disable_web_page_preview=True,
+        )
+
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         React to incoming messages and respond accordingly.
@@ -79,12 +114,12 @@ class AgroReportTelegramBot:
         if update.edited_message or not update.message or update.message.via_bot:
             return
 
+        if not await self.check_allowed(update, context):
+            return
+
         chat_id = update.effective_chat.id
         query = message_text(update) or ""
         sent_message = None
-
-        if update.edited_message or not update.message or update.message.via_bot:
-            return
 
         logger.info(
             f"New message received from user {update.message.from_user.name} (id: {update.message.from_user.id})"
@@ -96,7 +131,7 @@ class AgroReportTelegramBot:
         photo = update.message.photo
         if file or photo:
             sent_message = await update.effective_message.reply_text(
-                "Файл обрабатывается 🤖",
+                "Файл обрабатывается 🤖", reply_to_message_id=update.message.message_id
             )
             file_name, file_content = await manage_attachment(
                 self.model, update, context, file, photo
@@ -130,7 +165,7 @@ class AgroReportTelegramBot:
             )
             if not sent_message:
                 sent_message = await update.effective_message.reply_text(
-                    "Формирую отчёт 📝",
+                    "Формирую отчёт 📝", reply_to_message_id=update.message.message_id
                 )
             else:
                 await edit_message_with_retry(
@@ -152,15 +187,16 @@ class AgroReportTelegramBot:
                     formatted_report,
                     html=True,
                 )
-                group_report = f"""Отчет от {update.effective_user.full_name}:\n\n{formatted_report}
-Исходный текст отчёта:
-{query}"""
-                await context.bot.send_message(
-                    chat_id=self.config["group_chat_id"],
-                    text=group_report,
-                    parse_mode=constants.ParseMode.HTML,
-                    disable_web_page_preview=True,
-                )
+        #                 group_report = f"""Отчет от {update.effective_user.full_name}:\n\n{formatted_report}
+        # Исходный текст отчёта:
+
+        # {query}"""
+        #                 await context.bot.send_message(
+        #                     chat_id=self.config["group_chat_id"],
+        #                     text=group_report,
+        #                     parse_mode=constants.ParseMode.HTML,
+        #                     disable_web_page_preview=True,
+        #                 )
 
         except Exception as e:
             logger.exception(f"{str(e)}")
