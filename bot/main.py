@@ -15,6 +15,7 @@ def main():
         "ALLOWED_TELEGRAM_USER_IDS",
         "ADMIN_USER_IDS",
         "MISTRAL_API_KEY",
+        "GROUP_CHAT_ID",
     ]
     missing_values = [
         value for value in required_values if os.environ.get(value) is None
@@ -31,6 +32,7 @@ def main():
         "admin_user_ids": os.environ["ADMIN_USER_IDS"],
         "allowed_user_ids": os.environ["ALLOWED_TELEGRAM_USER_IDS"],
         "assistant_prompt": load_prompt(prompt_path="bot/prompts/0. system_prompt.md"),
+        "group_chat_id": os.environ["GROUP_CHAT_ID"],
     }
 
     report_builder = ReportBuilder(config)
