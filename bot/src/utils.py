@@ -157,8 +157,7 @@ class MistralAPIInference:
             The generated text response.
         """
         user_prompt = f"""{instruction}\n\n```{text}```""" if text else instruction
-        messages = []
-
+        messages = []  
         messages.append(dict(role="system", content=self.system_prompt))
         messages.append(dict(role="user", content=user_prompt))
 
@@ -181,8 +180,8 @@ class MistralAPIInference:
 
                 return prediction
             except mistralai.models.sdkerror.SDKError:
-                logger.warning('Rate limit exceeded. Sleeping for 60.')
-                time.sleep(60) 
+                logger.warning("Rate limit exceeded. Sleeping for 60.")
+                time.sleep(60)
                 prediction = (
                     self.mistral_client.chat.complete(
                         model=self.model,
@@ -279,7 +278,12 @@ def markdown_to_string(file_path):
 
 
 def load_prompt(
-    prompt_path, definition=False, validation=False, report=None, field=None
+    prompt_path,
+    definition=False,
+    validation=False,
+    report=None,
+    field=None,
+    allowed=None,
 ):
     if definition:
         today = date.today()
@@ -293,7 +297,9 @@ def load_prompt(
         )
     if validation:
         if field:
-            return markdown_to_string(prompt_path).format(report=report, field=field)
+            return markdown_to_string(prompt_path).format(
+                report=report, field=field, allowed=allowed
+            )
         else:
             return markdown_to_string(prompt_path).format(report=report)
     return markdown_to_string(prompt_path)
