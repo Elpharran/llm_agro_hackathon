@@ -96,17 +96,17 @@ class ReportBuilder:
         prompt = load_prompt(
             prompt_path="bot/prompts/5. validation_fields.md",
             validation=True,
-            report=data,
+            report=str(data),
             field=field,
         )
         return self._safe_predict_eval(prompt)
 
-    def _correct_json(self, data: dict) -> dict:
+    def _correct_json(self, data: str) -> dict:
         logger.info("Correcting JSON structure")
         prompt = load_prompt(
             prompt_path="bot/prompts/5. validation_json.md",
             validation=True,
-            report=str(data),
+            report=data,
         )
         return self._safe_predict_eval(prompt)
 
