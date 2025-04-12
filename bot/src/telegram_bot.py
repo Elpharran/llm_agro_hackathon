@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import pandas as pd
-
-from src.report_builder import ERROR_TEXT, ReportBuilder
 from src.logger_download import logger
+from src.report_builder import ERROR_TEXT, ReportBuilder
 from src.utils import (
     MistralAPIInference,
     edit_message_with_retry,
     error_handler,
+    get_reply_text,
     manage_attachment,
     message_text,
-    get_reply_text,
+    send_telegram_message,
 )
 from telegram import (
     BotCommand,
@@ -142,12 +142,24 @@ class AgroReportTelegramBot:
             response = self.builder.build(query)
             if response != ERROR_TEXT:
                 logger.info("Report ready!")
+                formatted_report = (
+                    f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
+                )
                 await edit_message_with_retry(
                     context,
                     chat_id,
                     str(sent_message.message_id),
-                    f"Ваш отчёт:\n\n<pre>{pd.DataFrame(response).to_string(index=False)}</pre>",
+                    formatted_report,
                     html=True,
+                )
+                group_report = f"""Отчет от {update.effective_user.full_name}:\n\n{formatted_report}
+Исходный текст отчёта:
+{query}"""
+                await context.bot.send_message(
+                    chat_id=self.config["group_chat_id"],
+                    text=group_report,
+                    parse_mode=constants.ParseMode.HTML,
+                    disable_web_page_preview=True,
                 )
 
         except Exception as e:
@@ -191,9 +203,12 @@ class AgroReportTelegramBot:
             )
         )
         application.add_handler(
-            MessageHandler(filters.ALL & (~filters.COMMAND), self.prompt)
+            MessageHandler(
+                filters.TEXT & filters.ChatType.PRIVATE & (~filters.COMMAND),
+                self.prompt,
+            )
         )
 
         application.add_error_handler(error_handler)
 
-        application.run_polling()
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
