@@ -92,9 +92,10 @@ class ReportBuilder:
         return ast.literal_eval(response)
 
     def _correct_fields(self, field: str, data: dict) -> dict:
-        logger.info("Correcting fields")
+        logger.warning("Correcting fields")
+        logger.warning(data)
         prompt = load_prompt(
-            prompt_path="bot/prompts/5. validation_fields.md",
+            prompt_path="prompts/5. validation_fields.md",
             validation=True,
             report=str(data),
             field=field,
@@ -102,9 +103,10 @@ class ReportBuilder:
         return self._safe_predict_eval(prompt)
 
     def _correct_json(self, data: str) -> dict:
-        logger.info("Correcting JSON structure")
+        logger.warning("Correcting JSON structure")
+        logger.warning(data)
         prompt = load_prompt(
-            prompt_path="bot/prompts/5. validation_json.md",
+            prompt_path="prompts/5. validation_json.md",
             validation=True,
             report=data,
         )
