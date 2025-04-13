@@ -1,7 +1,5 @@
 import logging
 import logging.config
-import os
-
 import yaml
 
 LOGGING_CFG_PATH = "src/configs/logging.cfg.yml"
