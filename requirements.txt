@@ -8,4 +8,4 @@ python-dotenv~=1.0.1
 python-telegram-bot~=21.10
 PyYAML~=6.0.2
 requests~=2.32.1
-git+https://github.com/Elpharran/docling.git@docling
+git+https://github.com/Elpharran/docling.git
