@@ -55,6 +55,7 @@ class AgroReportTelegramBot:
                 description=get_reply_text("help_description"),
             ),
         ]
+        self.last_report = ""
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -223,6 +224,17 @@ class AgroReportTelegramBot:
                     reply_markup=reply_markup,
                     parse_mode=constants.ParseMode.HTML,
                 )
+                group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
+    Исходный текст:
+
+    {self.last_report}"""
+                await context.bot.send_message(
+                    chat_id=self.config["group_chat_id"],
+                    text=group_report,
+                    parse_mode=constants.ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+                self.last_report = ""
             return
 
         # Обработка входящих сообщений
@@ -245,6 +257,13 @@ class AgroReportTelegramBot:
                     self.model, update, context, file, photo
                 )
                 logger.info(file_content)
+                if file_content == "<!-- image -->":
+                    await edit_message_with_retry(
+                        context,
+                        chat_id,
+                        str(sent_message.message_id),
+                        "К сожалению, модель не может обработать данный файл 😢 Приложите отчёт в текстовом виде, пожалуйста.",
+                    )
                 query_text = f"""[ТАБЛИЦА]:\n{file_content}\n\n{query_text}"""
 
             except Exception:
@@ -270,6 +289,7 @@ class AgroReportTelegramBot:
                 "Формирую отчёт 📝",
             )
 
+        self.last_report = query_text
         response = self.builder.build(query_text)
 
         if response != ERROR_TEXT:
@@ -354,6 +374,7 @@ class AgroReportTelegramBot:
                 response,
                 html=True,
             )
+        self.last_report = ""
 
     async def post_init(self, application: Application) -> None:
         """
