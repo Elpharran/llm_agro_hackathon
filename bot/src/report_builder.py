@@ -95,23 +95,12 @@ class ReportBuilder:
         )
         self.model.set_generation_params(system_prompt=config["assistant_prompt"])
 
-    def _correct_fields(self, field: str, data: dict) -> dict:
-        logger.warning(f"🚩 Correcting field {field}")
+    def _correct_fields(self, data: dict) -> dict:
+        logger.warning("🚩 Correcting fields")
         logger.warning(data)
-
-        if field == "Операция":
-            allowed = ", ".join(allowed_entities["type"])
-        if field == "Культура":
-            allowed = ", ".join(allowed_entities["culture"])
-        if field == "Подразделение":
-            allowed = ", ".join(allowed_entities["division"])
 
         prompt = load_prompt(
             prompt_path="prompts/5. validation_fields.md",
-            validation=True,
-            report=str(data),
-            field=field,
-            allowed=allowed,
         )
         return self.model.predict(prompt)
 
@@ -125,7 +114,7 @@ class ReportBuilder:
         )
         return self.model.predict(prompt)
 
-    def _validate(self, report: str, field=None, initial=False) -> dict:
+    def _validate(self, report: str, initial=False) -> dict:
         try:
             cleaned = clean_string(report)
             if "Отчёт не может быть обработан." in cleaned:
@@ -139,7 +128,7 @@ class ReportBuilder:
             return OperationEntry(**parsed).model_dump(exclude_none=True)
 
         except ValidationError:
-            correction = self._correct_fields(field, parsed)
+            correction = self._correct_fields(parsed)
             if initial:
                 return OperationList.model_validate(correction).model_dump(
                     exclude_none=True
@@ -150,6 +139,7 @@ class ReportBuilder:
 
         except json.decoder.JSONDecodeError:
             correction = self._correct_json(report if initial else clean_string(report))
+            correction = self._validate(correction)
             if initial:
                 return OperationList.model_validate(
                     ast.literal_eval(clean_string(correction))
@@ -161,50 +151,48 @@ class ReportBuilder:
             logger.error(traceback.format_exc())
             raise
 
-    def _gather_validated(
-        self, prompt: str, report_data: list[dict], field=None
-    ) -> list[dict]:
-        validated = []
+    def _gather_results(self, prompt: str, report_data: list[dict]) -> list[str]:
+        entries = []
         for entry in report_data:
             raw_report = self.model.predict(prompt, str(entry))
-            validated_entry = self._validate(raw_report, field=field)
-            validated.append(validated_entry)
-        return validated
+            entries.append(raw_report)
+        return entries
 
-    def _process_stage(
-        self, report_data: Union[dict, str], prompt_path, field=None, initial=False
-    ):
+    def _process_stage(self, report_data: Union[dict, str], prompt_path, initial=False):
         if initial:
             prompt = load_prompt(prompt_path, definition=True)
             reports = self.model.predict(prompt, report_data)
-
             logger.info(reports)
-
-            return self._validate(reports, initial=initial, field=field)
+            return self._validate(reports, initial=initial)
         else:
             prompt = load_prompt(prompt_path)
-            return self._gather_validated(prompt, report_data, field=field)
+            return self._gather_results(prompt, report_data)
 
     def build(self, report_data: str) -> list[dict]:
         processing_steps = [
             ("prompts/1. date_and_type_definition.md", "Операция", True),
             ("prompts/2. culture_definition.md", "Культура", False),
             ("prompts/3. division_definition.md", "Подразделение", False),
-            ("prompts/4. calculation.md", None, False),
+            ("prompts/4. calculation.md", "Вычисления", False),
         ]
         result = report_data
         for prompt_path, field, initial in processing_steps:
-            logger.info(f"Processing field: {field if field else 'Вычисления'}")
-            try:
-                result = self._process_stage(result, prompt_path, field, initial)
-            except Exception:
-                return ERROR_TEXT
+            logger.info(f"Processing field: {field}")
+            result = self._process_stage(result, prompt_path, initial)
 
-        for item in result:
-            item["Дата"] = item["Дата"].strftime("%d.%m.%Y")
-            item["За день, га"] = item.pop("За_день_га")
-            item["С начала операции, га"] = item.pop("С_начала_операции_га")
-            item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
-            item["Вал с начала, ц"] = item.pop("Вал_с_начала_ц")
+        validated = []
+        try:
+            for item in result:
+                validated.append(self._validate(item))
 
-        return result
+            for item in validated:
+                item["Дата"] = item["Дата"].strftime("%d.%m.%Y")
+                item["За день, га"] = item.pop("За_день_га")
+                item["С начала операции, га"] = item.pop("С_начала_операции_га")
+                item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
+                item["Вал с начала, ц"] = item.pop("Вал_с_начала_ц")
+                item.pop("Данные")
+
+            return validated
+        except Exception:
+            return ERROR_TEXT
