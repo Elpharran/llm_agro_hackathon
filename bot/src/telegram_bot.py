@@ -216,7 +216,7 @@ class AgroReportTelegramBot:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    formatted_report, reply_markup=reply_markup, parse_mode="HTML"
+                    formatted_report, reply_markup=reply_markup, parse_mode=constants.ParseMode.HTML
                 )
             return
 
@@ -267,7 +267,6 @@ class AgroReportTelegramBot:
             )
 
         response = self.builder.build(query_text)
-        formatted_report = ""
 
         if response != ERROR_TEXT:
 
@@ -320,21 +319,21 @@ class AgroReportTelegramBot:
                     ),
                 ]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = InlineKeyboardMarkup(keyboard)           
             await update.message.reply_text(
-                formatted_report, reply_markup=reply_markup, parse_mode="HTML"
+                formatted_report, reply_markup=reply_markup, parse_mode=constants.ParseMode.HTML
             )
 
-        #             group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
-        # Исходный текст:
+            group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
+Исходный текст:
 
-        # {query_text}"""
-        #             await context.bot.send_message(
-        #                 chat_id=self.config["group_chat_id"],
-        #                 text=group_report,
-        #                 parse_mode=constants.ParseMode.HTML,
-        #                 disable_web_page_preview=True,
-        #             )
+{query_text}"""
+            await context.bot.send_message(
+                chat_id=self.config["group_chat_id"],
+                text=group_report,
+                parse_mode=constants.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
         else:
             await edit_message_with_retry(
                 context,
