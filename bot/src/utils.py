@@ -191,6 +191,7 @@ class MistralAPIInference:
                     .choices[0]
                     .message.content
                 )
+                return prediction
             except requests.exceptions.HTTPError as http_err:
                 print(
                     f"HTTP error occurred: {http_err.response.status_code} - {http_err.response.text}"
