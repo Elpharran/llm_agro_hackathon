@@ -1,0 +1,16 @@
+[server]
+enableXsrfProtection = false
+enableCORS = false
+port = 8520
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = 'light'
+primaryColor = "#FF4C4C"
+backgroundColor = "#FAF2DA"
+secondaryBackgroundColor = "#D8F8B7"
+textColor = "#980F5A"
+font = "sans serif"
