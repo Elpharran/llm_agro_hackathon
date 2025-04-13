@@ -196,20 +196,13 @@ class AgroReportTelegramBot:
                 for entry in entries:
                     entry.pop("Данные", None)
                     if not needs_val:
-                        entry.pop("Вал с начала", None)
                         entry.pop("Вал с начала, ц", None)
+                        entry.pop("Вал за день, ц", None)
 
                 context.user_data["corrected_entries"] = entries
 
                 formatted_report = (
-                    "<pre>"
-                    + "\n\n".join(
-                        [
-                            pd.DataFrame([entry]).to_string(index=False)
-                            for entry in entries
-                        ]
-                    )
-                    + "</pre>"
+                    f"<pre>{pd.DataFrame(entries).to_string(index=False)}</pre>"
                 )
                 keyboard = [
                     [
@@ -308,22 +301,18 @@ class AgroReportTelegramBot:
 
             # Если исправления не требуются
             needs_val = False
-            for entry in entries:
+            for entry in response:
                 if entry["Операция"] == "Уборка":
                     needs_val = True
-            for entry in entries:
+            for entry in response:
                 entry.pop("Данные", None)
                 if not needs_val:
-                    entry.pop("Вал с начала", None)
                     entry.pop("Вал с начала, ц", None)
+                    entry.pop("Вал за день, ц", None)
 
             formatted_report = (
-                "<pre>"
-                + "\n\n".join(
-                    [pd.DataFrame([entry]).to_string(index=False) for entry in response]
+                    f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
                 )
-                + "</pre>"
-            )
             keyboard = [
                 [
                     InlineKeyboardButton(
