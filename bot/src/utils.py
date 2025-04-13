@@ -506,9 +506,9 @@ def extract_file_content(file_path: str, file_extension: str) -> str:
     file_handlers = {
         ".docx": _handle_file,
         ".pdf": _handle_file,
-        ".jpg": _handle_file,
-        ".jpeg": _handle_file,
-        ".png": _handle_file,
+        ".jpg": _handle_image_file,
+        ".jpeg": _handle_image_file,
+        ".png": _handle_image_file,
         ".xlsx": _handle_excel_file,
         ".xls": _handle_excel_file,
         ".doc": _handle_doc_file,
@@ -526,6 +526,19 @@ def extract_file_content(file_path: str, file_extension: str) -> str:
             raise RuntimeError(f"Unable to read file with {file_path}")
     else:
         raise ValueError("File extension is not supported.")
+
+
+def _handle_image_file(file_path: str) -> str:
+    file_path_binarized = preprocess_image(file_path)
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = True
+    pipeline_options.ocr_options = EasyOcrOptions()
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
+    return converter.convert(file_path_binarized).document.export_to_markdown()
 
 
 def _handle_file(file_path: str) -> str:
