@@ -343,10 +343,12 @@ class AgroReportTelegramBot:
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
+            await edit_message_with_retry(
+                context,
+                chat_id,
+                str(sent_message.message_id),
                 formatted_report,
                 reply_markup=reply_markup,
-                parse_mode=constants.ParseMode.HTML,
             )
 
             group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
