@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistralai import Mistral
+from src.image_utils import preprocess_image
 from src.logger_download import logger
 from telegram import InlineKeyboardMarkup, MessageEntity, Update, constants
 from telegram.ext import CallbackContext, ContextTypes
@@ -522,14 +523,14 @@ def extract_file_content(file_path: str, file_extension: str) -> str:
             content = handler(file_path)
             return content
         except Exception as e:
-            logger.error(f"Error reading file {file_path} \: {str(e)}")
+            logger.error(f"Error reading file {file_path}: {str(e)}")
             raise RuntimeError(f"Unable to read file with {file_path}")
     else:
         raise ValueError("File extension is not supported.")
 
 
 def _handle_image_file(file_path: str) -> str:
-    file_path_binarized = preprocess_image(file_path)
+    output_path = preprocess_image(file_path)
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = True
     pipeline_options.ocr_options = EasyOcrOptions()
@@ -538,7 +539,8 @@ def _handle_image_file(file_path: str) -> str:
             InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
         }
     )
-    return converter.convert(file_path_binarized).document.export_to_markdown()
+    logger.info(output_path)
+    return converter.convert(output_path).document.export_to_markdown()
 
 
 def _handle_file(file_path: str) -> str:

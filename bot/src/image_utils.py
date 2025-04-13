@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 import cv2
 import numpy as np
@@ -35,7 +34,7 @@ def order_points(pts: NDArray[np.uint8]) -> NDArray[np.uint8]:
     return rect
 
 
-def preprocess_image(image_path: Union[str, NDArray[np.uint8]]) -> NDArray[np.uint8]:
+def preprocess_image(image_path: str) -> str:
     """
     Process a screenshot of an Excel table by binarizing, finding table boundaries,
     and applying perspective correction.
@@ -44,13 +43,9 @@ def preprocess_image(image_path: Union[str, NDArray[np.uint8]]) -> NDArray[np.ui
         image_path: Path to the image file or a numpy array containing the image
 
     Returns:
-        NDArray[np.uint8]: Processed image with corrected perspective and binarized content
+        str: Processed image with corrected perspective and binarized content
     """
-    # Load image if path is provided
-    if isinstance(image_path, str):
-        img = cv2.imread(image_path)
-    else:
-        img = image_path.copy()
+    img = cv2.imread(image_path)
 
     # Convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -164,13 +159,21 @@ def preprocess_image(image_path: Union[str, NDArray[np.uint8]]) -> NDArray[np.ui
             # Apply adaptive thresholding with Sauvola method (better for document images)
             thresh_sauvola = threshold_sauvola(warped, window_size=15, k=0.2)
             warped_binary = (warped > thresh_sauvola).astype(np.uint8) * 255
-
-            return warped_binary
+            output_path = (
+                Path(image_path)
+                .with_stem(Path(image_path).stem + "_binarized")
+                .with_suffix(".jpg")
+            )
+            cv2.imwrite(output_path, warped_binary)
+            return output_path
 
     # If no suitable contour found, return the binarized original image using Sauvola thresholding
     thresh_sauvola = threshold_sauvola(normalized, window_size=15, k=0.2)
     simple_binary = (normalized > thresh_sauvola).astype(np.uint8) * 255
-    output_path = Path(image_path).name + "binarized" + Path(image_path).ext
-
+    output_path = (
+        Path(image_path)
+        .with_stem(Path(image_path).stem + "_binarized")
+        .with_suffix(".jpg")
+    )
     cv2.imwrite(output_path, simple_binary)
     return output_path
