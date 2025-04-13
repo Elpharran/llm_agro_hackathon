@@ -152,9 +152,9 @@ class ReportBuilder:
                 ).model_dump(exclude_none=True)
             return OperationEntry(**correction).model_dump(exclude_none=True)
 
-        except Exception as e:
+        except Exception:
             logger.error("Unexpected error:")
-            logger.error(e)
+            logger.error(traceback.format_exc())
             raise
 
     def _gather_validated(
@@ -202,6 +202,5 @@ class ReportBuilder:
             item["С начала операции, га"] = item.pop("С_начала_операции_га")
             item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
             item["Вал с начала, ц"] = item.pop("Вал_с_начала_ц")
-            item.pop("Данные", None)
 
         return result

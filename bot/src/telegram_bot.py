@@ -141,7 +141,6 @@ class AgroReportTelegramBot:
         await query.edit_message_reply_markup(reply_markup=None)
 
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        self.has_attachment = False
 
         if update.edited_message or not update.message or update.message.via_bot:
             return
@@ -181,13 +180,19 @@ class AgroReportTelegramBot:
                 next_entry_idx, next_key = queue[correction_data["current_index"]]
                 entry_number = next_entry_idx + 1
                 await update.message.reply_text(
-                    f"Введите значение для **'{next_key}'** в записи **{entry_number}:**",
+                    f"""Запись {entry_number}. Нераспознанные данные: ```
+{entries[entry_number]['Данные']}```
+
+Введите значение для поля '{next_key}':""",
                     parse_mode=constants.ParseMode.MARKDOWN,
                 )
             else:
                 # Все исправления завершены
                 context.user_data.pop("awaiting_correction", None)
+                for entry in entries:
+                    entry.pop("Данные", None)
                 context.user_data["corrected_entries"] = entries
+
                 # Форматируем отчет
                 formatted_report = (
                     "<pre>"
@@ -283,12 +288,21 @@ class AgroReportTelegramBot:
                 context.user_data["awaiting_correction"] = True
                 first_entry_idx, first_key = corrections_queue[0]
                 await update.message.reply_text(
-                    f"Введите значение для **'{first_key}'** в записи **{first_entry_idx + 1}:**",
+                    f"""При заполнении отчёта не удалось распознать некоторые значения, требуется уточнение.
+
+Запись {first_entry_idx + 1}. Нераспознанные данные: ```
+{response[first_entry_idx]['Данные']}```
+
+Введите значение для поля '{first_key}':
+""",
                     parse_mode=constants.ParseMode.MARKDOWN,
                 )
                 return
 
             # Если исправления не требуются
+            for entry in response:
+                entry.pop("Данные", None)
+
             formatted_report = (
                 "<pre>"
                 + "\n\n".join(
