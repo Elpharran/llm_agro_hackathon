@@ -487,7 +487,7 @@ async def manage_attachment(
             )
             return
 
-        return file_name, file_content
+        return file_content
 
     except Exception:
         raise
