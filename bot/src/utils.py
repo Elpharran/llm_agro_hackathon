@@ -323,8 +323,6 @@ def load_prompt(
     definition=False,
     validation=False,
     report=None,
-    field=None,
-    allowed=None,
 ):
     if definition:
         today = date.today()
@@ -337,12 +335,7 @@ def load_prompt(
             year=year, date=formatted_date, division=division + subdivision
         )
     if validation:
-        if field:
-            return markdown_to_string(prompt_path).format(
-                report=report, field=field, allowed=allowed
-            )
-        else:
-            return markdown_to_string(prompt_path).format(report=report)
+        return markdown_to_string(prompt_path).format(report=report)
     return markdown_to_string(prompt_path)
 
 
