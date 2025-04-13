@@ -22,9 +22,7 @@ from src.utils import (
     load_prompt,
 )
 
-ERROR_TEXT = (
-    "Ваш отчёт не может быть обработан 😭"
-)
+ERROR_TEXT = "Ваш отчёт не может быть обработан 😭 Попробуйте переформулировать текст или приложить фото таблицы хорошего качества."
 allowed_entities = load_entities()
 
 
@@ -35,9 +33,15 @@ class OperationEntry(BaseModel):
     Подразделение: Optional[str] = None
     Культура: Optional[str] = None
     За_день_га: Optional[Union[int, str]] = Field(None, alias="За день, га")
-    С_начала_операции_га: Optional[Union[int, str]] = Field(None, alias="С начала операции, га")
-    Вал_за_день_ц: Optional[Union[int, str]] = Field(None, alias="Вал за день, ц")
-    Вал_с_начала_ц: Optional[Union[int, str]] = Field(None, alias="Вал с начала, ц")
+    С_начала_операции_га: Optional[Union[int, str]] = Field(
+        None, alias="С начала операции, га"
+    )
+    Вал_за_день_ц: Optional[Union[int, float, str]] = Field(
+        None, alias="Вал за день, ц"
+    )
+    Вал_с_начала_ц: Optional[Union[int, float, str]] = Field(
+        None, alias="Вал с начала, ц"
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -124,7 +128,7 @@ class ReportBuilder:
     def _validate(self, report: str, field=None, initial=False) -> dict:
         try:
             cleaned = clean_string(report)
-            if cleaned == "Отчёт не может быть обработан.":
+            if "Отчёт не может быть обработан." in cleaned:
                 raise ValueError("Poor quality data, nothing to extract")
             parsed = json.loads(cleaned)
 
