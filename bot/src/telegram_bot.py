@@ -198,6 +198,9 @@ class AgroReportTelegramBot:
                     if not needs_val:
                         entry.pop("Вал с начала, ц", None)
                         entry.pop("Вал за день, ц", None)
+                    else:
+                        entry["Вал с начала, ц"] = entry["Вал с начала, ц"] / 100
+                        entry["Вал за день, ц"] = entry["Вал за день, ц"] / 100
 
                 context.user_data["corrected_entries"] = entries
 
@@ -309,10 +312,13 @@ class AgroReportTelegramBot:
                 if not needs_val:
                     entry.pop("Вал с начала, ц", None)
                     entry.pop("Вал за день, ц", None)
+                else:
+                    entry["Вал с начала, ц"] = entry["Вал с начала, ц"] / 100
+                    entry["Вал за день, ц"] = entry["Вал за день, ц"] / 100
 
             formatted_report = (
-                    f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
-                )
+                f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
+            )
             keyboard = [
                 [
                     InlineKeyboardButton(
