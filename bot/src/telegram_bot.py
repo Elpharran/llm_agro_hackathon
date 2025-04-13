@@ -189,11 +189,18 @@ class AgroReportTelegramBot:
             else:
                 # Все исправления завершены
                 context.user_data.pop("awaiting_correction", None)
+                needs_val = False
+                for entry in entries:
+                    if entry["Операция"] == "Уборка":
+                        needs_val = True
                 for entry in entries:
                     entry.pop("Данные", None)
+                    if not needs_val:
+                        entry.pop("Вал с начала", None)
+                        entry.pop("Вал с начала, ц", None)
+
                 context.user_data["corrected_entries"] = entries
 
-                # Форматируем отчет
                 formatted_report = (
                     "<pre>"
                     + "\n\n".join(
@@ -216,7 +223,9 @@ class AgroReportTelegramBot:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    formatted_report, reply_markup=reply_markup, parse_mode=constants.ParseMode.HTML
+                    formatted_report,
+                    reply_markup=reply_markup,
+                    parse_mode=constants.ParseMode.HTML,
                 )
             return
 
@@ -232,7 +241,6 @@ class AgroReportTelegramBot:
         file = update.message.document
         photo = update.message.photo
         if file or photo:
-            self.has_attachment = True
             sent_message = await update.effective_message.reply_text(
                 "Файл обрабатывается 🤖", reply_to_message_id=update.message.message_id
             )
@@ -299,8 +307,15 @@ class AgroReportTelegramBot:
                 return
 
             # Если исправления не требуются
-            for entry in response:
+            needs_val = False
+            for entry in entries:
+                if entry["Операция"] == "Уборка":
+                    needs_val = True
+            for entry in entries:
                 entry.pop("Данные", None)
+                if not needs_val:
+                    entry.pop("Вал с начала", None)
+                    entry.pop("Вал с начала, ц", None)
 
             formatted_report = (
                 "<pre>"
@@ -319,9 +334,11 @@ class AgroReportTelegramBot:
                     ),
                 ]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)           
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(
-                formatted_report, reply_markup=reply_markup, parse_mode=constants.ParseMode.HTML
+                formatted_report,
+                reply_markup=reply_markup,
+                parse_mode=constants.ParseMode.HTML,
             )
 
             group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
