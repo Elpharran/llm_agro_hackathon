@@ -257,13 +257,6 @@ class AgroReportTelegramBot:
                     self.model, update, context, file, photo
                 )
                 logger.info(file_content)
-                if file_content == "<!-- image -->":
-                    await edit_message_with_retry(
-                        context,
-                        chat_id,
-                        str(sent_message.message_id),
-                        "К сожалению, модель не может обработать данный файл 😢 Приложите отчёт в текстовом виде, пожалуйста.",
-                    )
                 query_text = f"""[ТАБЛИЦА]:\n{file_content}\n\n{query_text}"""
 
             except Exception:
