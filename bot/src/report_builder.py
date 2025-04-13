@@ -22,7 +22,9 @@ from src.utils import (
     load_prompt,
 )
 
-ERROR_TEXT = "Ваш отчёт не может быть обработан, уточните поля и значения, пожалуйста."
+ERROR_TEXT = (
+    "Ваш отчёт не может быть обработан 😭"
+)
 allowed_entities = load_entities()
 
 
@@ -32,10 +34,10 @@ class OperationEntry(BaseModel):
     Данные: str = Field(..., description="Дополнительные данные об операции")
     Подразделение: Optional[str] = None
     Культура: Optional[str] = None
-    За_день_га: Optional[float] = Field(None, alias="За день, га")
-    С_начала_операции_га: Optional[float] = Field(None, alias="С начала операции, га")
-    Вал_за_день_ц: Optional[float] = Field(None, alias="Вал за день, ц")
-    Вал_с_начала_ц: Optional[float] = Field(None, alias="Вал с начала, ц")
+    За_день_га: Optional[Union[int, str]] = Field(None, alias="За день, га")
+    С_начала_операции_га: Optional[Union[int, str]] = Field(None, alias="С начала операции, га")
+    Вал_за_день_ц: Optional[Union[int, str]] = Field(None, alias="Вал за день, ц")
+    Вал_с_начала_ц: Optional[Union[int, str]] = Field(None, alias="Вал с начала, ц")
 
     @model_validator(mode="before")
     @classmethod
@@ -92,7 +94,7 @@ class ReportBuilder:
     def _correct_fields(self, field: str, data: dict) -> dict:
         logger.warning(f"🚩 Correcting field {field}")
         logger.warning(data)
-        
+
         if field == "Операция":
             allowed = ", ".join(allowed_entities["type"])
         if field == "Культура":
@@ -122,6 +124,8 @@ class ReportBuilder:
     def _validate(self, report: str, field=None, initial=False) -> dict:
         try:
             cleaned = clean_string(report)
+            if cleaned == "Отчёт не может быть обработан.":
+                raise ValueError("Poor quality data, nothing to extract")
             parsed = json.loads(cleaned)
 
             if initial:
@@ -148,9 +152,9 @@ class ReportBuilder:
                 ).model_dump(exclude_none=True)
             return OperationEntry(**correction).model_dump(exclude_none=True)
 
-        except Exception:
+        except Exception as e:
             logger.error("Unexpected error:")
-            logger.error(traceback.format_exc())
+            logger.error(e)
             raise
 
     def _gather_validated(
@@ -159,7 +163,8 @@ class ReportBuilder:
         validated = []
         for entry in report_data:
             raw_report = self.model.predict(prompt, str(entry))
-            validated.append(self._validate(raw_report, field=field))
+            validated_entry = self._validate(raw_report, field=field)
+            validated.append(validated_entry)
         return validated
 
     def _process_stage(
@@ -168,7 +173,9 @@ class ReportBuilder:
         if initial:
             prompt = load_prompt(prompt_path, definition=True)
             reports = self.model.predict(prompt, report_data)
+
             logger.info(reports)
+
             return self._validate(reports, initial=initial, field=field)
         else:
             prompt = load_prompt(prompt_path)
@@ -183,7 +190,7 @@ class ReportBuilder:
         ]
         result = report_data
         for prompt_path, field, initial in processing_steps:
-            logger.info(f"Processing field: {field}")
+            logger.info(f"Processing field: {field if field else 'Вычисления'}")
             try:
                 result = self._process_stage(result, prompt_path, field, initial)
             except Exception:
