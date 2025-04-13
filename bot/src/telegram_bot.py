@@ -349,6 +349,7 @@ class AgroReportTelegramBot:
                 str(sent_message.message_id),
                 formatted_report,
                 reply_markup=reply_markup,
+                html=True
             )
 
             group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
