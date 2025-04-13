@@ -413,7 +413,7 @@ async def edit_message_with_retry(
             chat_id=chat_id,
             message_id=int(message_id),
             text=text,
-            parse_mode=constants.ParseMode.HTML if html else None,
+            parse_mode=constants.ParseMode.HTML if html else constants.ParseMode.MARKDOWN,
             reply_markup=reply_markup,
         )
     except telegram.error.RetryAfter as e:
@@ -422,7 +422,7 @@ async def edit_message_with_retry(
         )
         await asyncio.sleep(e.retry_after)
         await edit_message_with_retry(
-            context, chat_id, message_id, text, markdown, reply_markup=reply_markup
+            context, chat_id, message_id, text, html, reply_markup=reply_markup
         )
 
     except telegram.error.BadRequest as e:
@@ -531,7 +531,7 @@ def extract_file_content(file_path: str, file_extension: str) -> str:
 def _handle_file(file_path: str) -> str:
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = True
-    pipeline_options.ocr_options = EasyOcrOptions()
+    pipeline_options.ocr_options = EasyOcrOptions(use_gpu=False)
     converter = DocumentConverter(
         format_options={
             InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
