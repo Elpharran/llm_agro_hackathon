@@ -95,103 +95,105 @@ class ReportBuilder:
         )
         self.model.set_generation_params(system_prompt=config["assistant_prompt"])
 
-    def _correct_fields(self, data: dict) -> dict:
+    def _correct_fields(self, report: dict) -> dict:
         logger.warning("🚩 Correcting fields")
-        logger.warning(data)
+        logger.warning(report)
 
         prompt = load_prompt(
-            prompt_path="prompts/5. validation_fields.md",
+            "prompts/3. validation_fields.md", validation=True, report=str(report)
         )
         return self.model.predict(prompt)
 
-    def _correct_json(self, data: str) -> dict:
+    def _correct_json(self, report: str) -> dict:
         logger.warning("🚩 Correcting JSON structure")
-        logger.warning(data)
+        logger.warning(report)
         prompt = load_prompt(
-            prompt_path="prompts/5. validation_json.md",
+            "prompts/4. validation_json.md",
             validation=True,
-            report=data,
+            report=report,
         )
-        return self.model.predict(prompt)
+        return self.model.predict(prompt, report)
 
-    def _validate(self, report: str, initial=False) -> dict:
+    def _validate(self, reports: str) -> dict:
         try:
-            cleaned = clean_string(report)
+            cleaned = clean_string(reports)
+
             if "Отчёт не может быть обработан." in cleaned:
                 raise ValueError("Poor quality data, nothing to extract")
-            parsed = json.loads(cleaned)
 
-            if initial:
-                return OperationList.model_validate(parsed).model_dump(
-                    exclude_none=True
-                )
-            return OperationEntry(**parsed).model_dump(exclude_none=True)
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                parsed = [
+                    json.loads(clean_string(item)) if isinstance(item, str) else item
+                    for item in parsed
+                ]
+            return OperationList.model_validate(parsed).model_dump(exclude_none=True)
 
         except ValidationError:
             correction = self._correct_fields(parsed)
-            if initial:
-                return OperationList.model_validate(correction).model_dump(
-                    exclude_none=True
-                )
-            return OperationEntry(
-                **ast.literal_eval(clean_string(correction))
+            return OperationList.model_validate(
+                ast.literal_eval(clean_string(correction))
             ).model_dump(exclude_none=True)
 
         except json.decoder.JSONDecodeError:
-            correction = self._correct_json(report if initial else clean_string(report))
-            correction = self._validate(correction)
-            if initial:
-                return OperationList.model_validate(
-                    ast.literal_eval(clean_string(correction))
-                ).model_dump(exclude_none=True)
-            return OperationEntry(**correction).model_dump(exclude_none=True)
+            correction = self._correct_json(reports)
+            return OperationList.model_validate(
+                ast.literal_eval(clean_string(correction))
+            ).model_dump(exclude_none=True)
 
         except Exception:
             logger.error("Unexpected error:")
             logger.error(traceback.format_exc())
             raise
 
-    def _gather_results(self, prompt: str, report_data: list[dict]) -> list[str]:
-        entries = []
-        for entry in report_data:
-            raw_report = self.model.predict(prompt, str(entry))
-            entries.append(raw_report)
-        return entries
+    def _gather_raw_results(self, prompt: str, report_data: list[dict]) -> list[str]:
+        reports = []
+        for report in report_data:
+            raw_report = self.model.predict(prompt, str(report))
+            reports.append(raw_report)
+        return reports
 
-    def _process_stage(self, report_data: Union[dict, str], prompt_path, initial=False):
+    def _process_stage(
+        self,
+        report_data: Union[list[dict], str],
+        prompt_path: str,
+        initial=False,
+    ) -> list[dict]:
         if initial:
             prompt = load_prompt(prompt_path, definition=True)
             reports = self.model.predict(prompt, report_data)
             logger.info(reports)
-            return self._validate(reports, initial=initial)
-        else:
-            prompt = load_prompt(prompt_path)
-            return self._gather_results(prompt, report_data)
+            return self._validate(reports)
+
+        prompt = load_prompt(prompt_path, definition=False)
+        reports = self._gather_raw_results(prompt, report_data)
+        return self._validate(
+            json.dumps(reports, ensure_ascii=False, indent=2, sort_keys=False)
+        )
 
     def build(self, report_data: str) -> list[dict]:
         processing_steps = [
-            ("prompts/1. date_and_type_definition.md", "Операция", True),
-            ("prompts/2. culture_definition.md", "Культура", False),
-            ("prompts/3. division_definition.md", "Подразделение", False),
-            ("prompts/4. calculation.md", "Вычисления", False),
+            (
+                "prompts/1. initial.md",
+                "Дата, операция, культура",
+                True,
+            ),
+            ("prompts/2. final.md", "Подразделение, вычисления", False),
         ]
+
         result = report_data
         for prompt_path, field, initial in processing_steps:
-            logger.info(f"Processing field: {field}")
+            logger.info(f"Processing step: {field}")
             result = self._process_stage(result, prompt_path, initial)
 
-        validated = []
         try:
             for item in result:
-                validated.append(self._validate(item))
-
-            for item in validated:
                 item["Дата"] = item["Дата"].strftime("%d.%m.%Y")
                 item["За день, га"] = item.pop("За_день_га")
                 item["С начала операции, га"] = item.pop("С_начала_операции_га")
                 item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
                 item["Вал с начала, ц"] = item.pop("Вал_с_начала_ц")
 
-            return validated
+            return result
         except Exception:
             return ERROR_TEXT
