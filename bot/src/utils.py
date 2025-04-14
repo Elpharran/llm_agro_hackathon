@@ -330,7 +330,7 @@ def load_prompt(
         entities = load_entities()
         division = entities["division"]
         subdivision = entities["subdivision"]
-        formatted_date = today.isoformat()
+        formatted_date = today.strftime("%d.%m.%Y")
         return markdown_to_string(prompt_path).format(
             year=year, date=formatted_date, division=division + subdivision
         )
