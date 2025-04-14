@@ -104,16 +104,6 @@ class ReportBuilder:
         )
         return self.model.predict(prompt)
 
-    def _correct_json(self, report: str) -> dict:
-        logger.warning("🚩 Correcting JSON structure")
-        logger.warning(report)
-        prompt = load_prompt(
-            "prompts/4. validation_json.md",
-            validation=True,
-            report=report,
-        )
-        return self.model.predict(prompt, report)
-
     def _validate(self, reports: str) -> dict:
         try:
             cleaned = clean_string(reports)
@@ -127,6 +117,13 @@ class ReportBuilder:
                     json.loads(clean_string(item)) if isinstance(item, str) else item
                     for item in parsed
                 ]
+            for item in parsed:
+                try:
+                    parsed_date = datetime.fromisoformat(item['Дата'])
+                    item['Дата'] = parsed_date.strftime('%d.%m.%Y')
+                except ValueError:
+                    pass
+
             return OperationList.model_validate(parsed).model_dump(exclude_none=True)
 
         except ValidationError:
