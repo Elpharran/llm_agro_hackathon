@@ -31,15 +31,11 @@ from telegram.ext import (
 
 
 class AgroReportTelegramBot:
-    """
-    Class representing a CISM-LLM Telegram Bot.
-    """
-
     def __init__(self, builder: ReportBuilder):
         """
         Initializes the bot with the given configuration and LLM bot object.
         :param config: A dictionary containing the bot configuration
-        :param openai: LLMHelper object
+        :param openai: ReportBuilder object
         """
 
         self.builder = builder
