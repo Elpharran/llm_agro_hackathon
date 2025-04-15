@@ -3,63 +3,84 @@ import pandas as pd
 import plotly.express as px
 import io
 
+from streamlit import session_state as ss
 
-@st.cache_data
+
 def load_data():
-    df = pd.read_excel("примеры.xlsx")
-    df["Дата"] = pd.to_datetime(df["Дата"], dayfirst=True)
-    return df
-
-df = load_data()
-
-st.title("📊 Анализ результатов")
-
-st.sidebar.header("Фильтры")
-date_option = st.sidebar.radio(
-    "Выберите режим фильтрации:",
-    ("Вся история", "Выбрать период", "Сегодня")
-)
+    ss.df = pd.read_excel("примеры.xlsx")
+    ss.df["Дата"] = pd.to_datetime(ss.df["Дата"], dayfirst=True)
+    ss.df["id"] = range(len(ss.df))
+    ss.df = ss.df[[ss.df.columns.tolist()[-1]] + ss.df.columns.tolist()[:-1]]
+    # ss.df = get_all_data()
+    return ss.df
 
 
-if date_option == "Выбрать период":
-    start_date = st.sidebar.date_input("Начальная дата", df["Дата"].min())
-    end_date = st.sidebar.date_input("Конечная дата", df["Дата"].max())
-    df = df[(df["Дата"] >= pd.to_datetime(start_date)) & (df["Дата"] <= pd.to_datetime(end_date))]
-
-elif date_option == "Сегодня":
-    today = pd.to_datetime("today").normalize()
-    df = df[df["Дата"] == today]
-
-
-output = io.BytesIO()
-
-with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    df["Дата"] = df["Дата"].dt.strftime("%d.%m.%Y") 
-    df.to_excel(writer, index=False, sheet_name="Отчет")
-
-output.seek(0)
-
-st.sidebar.download_button(
-    label="Скачать отчет за выбранный\n\nпериод в Excel",
-    data=output,
-    file_name=f"отчет_{start_date}_{end_date}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",type='primary'
-)
-
-tab1, tab2, tab3 = st.tabs(["🌱 По культуре", "📌 По операции", "🏢 По подразделениям"])
+def load_session_state():
+    ss.df = load_data()
+    ss.today = pd.to_datetime("today").normalize()
+    if "start_date" not in ss:
+        ss.start_date = ss.today
+    if "end_date" not in ss:
+        ss.end_date = ss.today
 
 
-with tab1:
-    selected_culture = st.selectbox("Выберите культуру:", sorted(df["Культура"].unique()))
-    filtered_df = df[df["Культура"] == selected_culture]
+def create_sidebar():
+    st.sidebar.header("Фильтры")
+    ss.date_option = st.sidebar.radio(
+        "Выберите режим фильтрации:", ("Вся история", "Выбрать период", "Сегодня")
+    )
+
+    if ss.date_option == "Выбрать период":
+        ss.start_date = st.sidebar.date_input("Начальная дата", ss.df["Дата"].min())
+        ss.end_date = st.sidebar.date_input("Конечная дата", ss.df["Дата"].max())
+        ss.df = ss.df[
+            (ss.df["Дата"] >= pd.to_datetime(ss.start_date))
+            & (ss.df["Дата"] <= pd.to_datetime(ss.end_date))
+        ]
+
+    elif ss.date_option == "Сегодня":
+
+        ss.df = ss.df[ss.df["Дата"] == ss.today]
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        ss.df["Дата"] = ss.df["Дата"].dt.strftime("%d.%m.%Y")
+        ss.df.to_excel(writer, index=False, sheet_name="Отчет")
+
+    output.seek(0)
+
+    report_name = (
+        f"Отчёт {ss.start_date} - {ss.end_date}.xlsx"
+        if ss.date_option == "Выбрать период"
+        else f"Отчёт {ss.today}"
+    )
+    st.sidebar.download_button(
+        label="Скачать отчет за выбранный\n\nпериод в Excel",
+        data=output,
+        file_name=report_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+    )
+
+
+def cultures_figure():
+    selected_culture = st.selectbox(
+        "Выберите культуру:", sorted(ss.df["Культура"].unique())
+    )
+    filtered_df = ss.df[ss.df["Культура"] == selected_culture]
 
     if filtered_df.empty:
         st.warning("Нет данных для выбранной культуры.")
     else:
-        agg_df = filtered_df.groupby("Операция").agg({
-            "За день, га": "sum",
-            "С начала операции, га": "sum"
-        }).reset_index().melt(id_vars="Операция", var_name="Тип показателя", value_name="Площадь, га")
+        agg_df = (
+            filtered_df.groupby("Операция")
+            .agg({"За день, га": "sum", "С начала операции, га": "sum"})
+            .reset_index()
+            .melt(
+                id_vars="Операция", var_name="Тип показателя", value_name="Площадь, га"
+            )
+        )
 
         fig = px.bar(
             agg_df,
@@ -69,21 +90,25 @@ with tab1:
             barmode="stack",
             title=f"Сравнение показателей по операциям для культуры: {selected_culture}",
             text_auto=True,
-            height=600
+            height=600,
         )
-        fig.update_layout(xaxis_title="Операция", yaxis_title="Площадь, га", title_x=0.5)
+        fig.update_layout(
+            xaxis_title="Операция", yaxis_title="Площадь, га", title_x=0.5
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 
-with tab2:
-    operation_list = sorted(df["Операция"].unique())
-    selected_operation = st.selectbox("Выберите операцию для анализа:", operation_list)
+def operations_figure():
+    operation_list = sorted(ss.df["Операция"].unique())
+    selected_operation = st.selectbox("Выберите операцию:", operation_list)
 
-    op_df = df[df["Операция"] == selected_operation]
-    group_op = op_df.groupby("Культура").agg({
-        "За день, га": "sum",
-        "С начала операции, га": "sum"
-    }).reset_index().melt(id_vars="Культура", var_name="Тип показателя", value_name="Площадь, га")
+    op_df = ss.df[ss.df["Операция"] == selected_operation]
+    group_op = (
+        op_df.groupby("Культура")
+        .agg({"За день, га": "sum", "С начала операции, га": "sum"})
+        .reset_index()
+        .melt(id_vars="Культура", var_name="Тип показателя", value_name="Площадь, га")
+    )
 
     if group_op.empty:
         st.warning("Нет данных по выбранной операции.")
@@ -96,21 +121,25 @@ with tab2:
             barmode="stack",
             title=f"Сравнение культур по показателям операции: {selected_operation}",
             text_auto=True,
-            height=600
+            height=600,
         )
-        fig_op.update_layout(xaxis_title="Культура", yaxis_title="Площадь, га", title_x=0.5)
+        fig_op.update_layout(
+            xaxis_title="Культура", yaxis_title="Площадь, га", title_x=0.5
+        )
         st.plotly_chart(fig_op, use_container_width=True)
 
 
-with tab3:
-    division_list = sorted(df["Подразделение"].unique())
-    selected_division = st.selectbox("Выберите подразделение:", sorted(df["Подразделение"].unique()))
+def divisions_figure():
+    division_list = sorted(ss.df["Подразделение"].unique())
+    selected_division = st.selectbox("Выберите подразделение:", division_list)
 
+    div_df = ss.df[ss.df["Подразделение"] == selected_division]
 
-    div_df = df[df["Подразделение"] == selected_division]
-
-    group_summary = div_df.groupby(["Операция", "Культура"])["За день, га"].sum().reset_index()
-
+    group_summary = (
+        div_df.groupby(["Операция", "Культура"])["За день, га"].sum().reset_index()
+    )
+    group_summary = group_summary.fillna(0)
+    group_summary = group_summary[group_summary["За день, га"] > 0]
 
     if group_summary.empty:
         st.warning("Нет данных по выбранному подразделению.")
@@ -123,7 +152,72 @@ with tab3:
             barmode="group",
             title=f"Общий объём работ по операциям и культурам — {selected_division}",
             labels={"За день, га": "Площадь, га"},
-            height=600
+            text_auto=True,
+            height=600,
         )
-        fig_summary.update_layout(title_x=0.5)
+        fig_summary.update_layout(title_x=0.5, bargap=0.0, bargroupgap=0.0)
         st.plotly_chart(fig_summary, use_container_width=True)
+
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="Отчёты", page_icon="🌾")
+    st.title("📊 Отчётность")
+    load_session_state()
+    create_sidebar()
+    tab1, tab2, tab3, tab4 = st.tabs(
+        [
+            "📝 Все данные",
+            "🌱 График по культурам",
+            "📌 График по операциям",
+            "🏢 График по подразделениям",
+        ]
+    )
+    with tab1:
+        st.markdown(
+            "**При необходимости изменения данных отредактируйте требуемые значения в ячейках таблицы**"
+        )
+
+        # Используем data_editor для редактирования
+        edited_df = st.data_editor(
+            ss.df,
+            use_container_width=True,
+            num_rows="fixed",
+            hide_index=True,
+            disabled=['id']
+        )
+
+    if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
+        changes = edited_df.compare(ss.df)
+        updates = {}
+
+        for idx in changes.index:
+            row_changes = changes.loc[idx]
+            new_values = {}
+
+            for col in edited_df.columns:
+                if (col, 'self') in row_changes and (col, 'other') in row_changes:
+                    new_value = row_changes[(col, 'self')]
+                    old_value = row_changes[(col, 'other')]
+                    if pd.notna(new_value) and new_value != old_value:
+                        new_values[col] = new_value
+
+            if new_values:
+                row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
+                updates[row_id] = new_values
+
+        if updates:
+            st.write(updates)
+            #update_entry_by_ids(list(updates.keys()), list(updates.values()))
+            st.success('Данные успешно обновлены', icon='✅')
+            ss.df = edited_df
+        else:
+            st.info('Нет изменений для обновления.')
+
+
+
+    with tab2:
+        cultures_figure()
+    with tab3:
+        operations_figure()
+    with tab4:
+        divisions_figure()
