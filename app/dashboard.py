@@ -186,24 +186,24 @@ if __name__ == "__main__":
             disabled=['id']
         )
 
-    if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
-        changes = edited_df.compare(ss.df)
-        updates = {}
+        if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
+            changes = edited_df.compare(ss.df)
+            updates = {}
 
-        for idx in changes.index:
-            row_changes = changes.loc[idx]
-            new_values = {}
+            for idx in changes.index:
+                row_changes = changes.loc[idx]
+                new_values = {}
 
-            for col in edited_df.columns:
-                if (col, 'self') in row_changes and (col, 'other') in row_changes:
-                    new_value = row_changes[(col, 'self')]
-                    old_value = row_changes[(col, 'other')]
-                    if pd.notna(new_value) and new_value != old_value:
-                        new_values[col] = new_value
+                for col in edited_df.columns:
+                    if (col, 'self') in row_changes and (col, 'other') in row_changes:
+                        new_value = row_changes[(col, 'self')]
+                        old_value = row_changes[(col, 'other')]
+                        if pd.notna(new_value) and new_value != old_value:
+                            new_values[col] = new_value
 
-            if new_values:
-                row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
-                updates[row_id] = new_values
+                if new_values:
+                    row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
+                    updates[row_id] = new_values
 
         if updates:
             #update_entry_by_ids(list(updates.keys()), list(updates.values()))
@@ -215,8 +215,8 @@ if __name__ == "__main__":
 
 
     with tab2:
-        cultures_figure()
+        divisions_figure()
     with tab3:
         operations_figure()
     with tab4:
-        divisions_figure()
+        cultures_figure()
