@@ -104,6 +104,16 @@ class ReportBuilder:
         )
         return self.model.predict(prompt)
 
+    def _correct_json(self, report: str) -> dict:
+        logger.warning("🚩 Correcting JSON structure")
+        logger.warning(report)
+        prompt = load_prompt(
+            "prompts/4. validation_json.md",
+            validation=True,
+            report=report,
+        )
+        return self.model.predict(prompt, report)
+
     def _validate(self, reports: str) -> dict:
         try:
             cleaned = clean_string(reports)
