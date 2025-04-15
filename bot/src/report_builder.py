@@ -64,18 +64,22 @@ class OperationEntry(BaseModel):
 
     @field_validator("Операция")
     def validate_operation(cls, v):
+
+        allowed_entities["type"].append["Не определено"]
         if v not in allowed_entities["type"]:
             raise ValueError(f"Операция '{v}' не в списке допустимых.")
         return v
 
     @field_validator("Культура")
     def validate_culture(cls, v):
+        allowed_entities["culture"].append["Не определено"]
         if v and v not in allowed_entities["culture"]:
             raise ValueError(f"Культура '{v}' не в списке допустимых.")
         return v
 
     @field_validator("Подразделение")
     def validate_division(cls, v):
+        allowed_entities["division"].append["Не определено"]
         if v and v not in allowed_entities["division"]:
             raise ValueError(f"Подразделение '{v}' не в списке допустимых.")
         return v
@@ -129,8 +133,8 @@ class ReportBuilder:
                 ]
             for item in parsed:
                 try:
-                    parsed_date = datetime.fromisoformat(item['Дата'])
-                    item['Дата'] = parsed_date.strftime('%d.%m.%Y')
+                    parsed_date = datetime.fromisoformat(item["Дата"])
+                    item["Дата"] = parsed_date.strftime("%d.%m.%Y")
                 except ValueError:
                     pass
 
