@@ -206,7 +206,6 @@ if __name__ == "__main__":
                 updates[row_id] = new_values
 
         if updates:
-            st.write(updates)
             #update_entry_by_ids(list(updates.keys()), list(updates.values()))
             st.success('Данные успешно обновлены', icon='✅')
             ss.df = edited_df
