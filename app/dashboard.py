@@ -7,7 +7,7 @@ from streamlit import session_state as ss
 
 
 def load_data():
-    ss.df = pd.read_excel("примеры.xlsx")
+    ss.df = pd.read_excel("app/примеры.xlsx")
     ss.df["Дата"] = pd.to_datetime(ss.df["Дата"], dayfirst=True)
     ss.df["id"] = range(len(ss.df))
     ss.df = ss.df[[ss.df.columns.tolist()[-1]] + ss.df.columns.tolist()[:-1]]
