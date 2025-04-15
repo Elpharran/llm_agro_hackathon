@@ -205,10 +205,10 @@ if __name__ == "__main__":
                     row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
                     updates[row_id] = new_values
 
-        if updates:
-            #update_entry_by_ids(list(updates.keys()), list(updates.values()))
-            st.success('Данные успешно обновлены', icon='✅')
-            ss.df = edited_df
+            if updates:
+                #update_entry_by_ids(list(updates.keys()), list(updates.values()))
+                st.success('Данные успешно обновлены', icon='✅')
+                ss.df = edited_df
         else:
             st.info('Нет изменений для обновления.')
 
