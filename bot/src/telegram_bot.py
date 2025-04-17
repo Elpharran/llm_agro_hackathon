@@ -113,9 +113,11 @@ class AgroReportTelegramBot:
             corrected = context.user_data.get("corrected_entries")
             if corrected:
                 self.last_report = corrected
-            self.last_report["Дата"] = datetime.strptime(
-                self.last_report["Дата"], "%d.%m.%Y"
-            )
+            for item in self.last_report:
+
+                item["Дата"] = datetime.strptime(
+                    item["Дата"], "%d.%m.%Y"
+                )
             insert_objects(self.last_report)
 
             await context.bot.send_message(
