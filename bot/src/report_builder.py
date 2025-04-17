@@ -12,7 +12,6 @@ from pydantic import (
     RootModel,
     ValidationError,
     field_validator,
-    model_validator,
 )
 from src.logger_download import logger
 from src.utils import (
@@ -27,7 +26,7 @@ allowed_entities = load_entities()
 
 
 class OperationEntry(BaseModel):
-    Дата: datetime = Field(..., description="Дата операции в формате ДД.ММ.ГГГГ")
+    Дата: str = Field(..., description="Дата операции в формате ДД.ММ.ГГГГ")
     Операция: str = Field(..., description="Название операции")
     Данные: str = Field(..., description="Дополнительные данные об операции")
     Подразделение: Optional[str] = None
@@ -42,25 +41,6 @@ class OperationEntry(BaseModel):
     Вал_с_начала_ц: Optional[Union[int, float, str]] = Field(
         None, alias="Вал с начала, ц"
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_date(cls, data: dict) -> dict:
-        if "Дата" in data:
-            date_str = data["Дата"]
-            try:
-                parsed_date = datetime.strptime(date_str, "%d.%m.%Y")
-            except ValueError:
-                try:
-                    parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
-                except ValueError:
-                    raise ValueError(
-                        f"Invalid date format: {date_str}. "
-                        "Use either ДД.ММ.ГГГГ or YYYY-MM-DD"
-                    )
-            data["Дата"] = parsed_date.strftime("%d.%m.%Y")
-            data["Дата"] = datetime.strptime(data["Дата"], "%d.%m.%Y")
-        return data
 
     @field_validator("Операция")
     def validate_operation(cls, v):
@@ -93,7 +73,7 @@ class ReportBuilder:
     def __init__(self, config: dict):
         self.config = config
         self.model = MistralAPIInference(
-            config_path="src/configs/mistral_api.cfg.yml",
+            config_path="bot/src/configs/mistral_api.cfg.yml",
             api_key=config["mistral_api_key"],
             proxy_url=None,
         )
@@ -104,7 +84,7 @@ class ReportBuilder:
         logger.warning(report)
 
         prompt = load_prompt(
-            "prompts/3. validation_fields.md", validation=True, report=str(report)
+            "3. validation_fields.md", validation=True, report=str(report)
         )
         return self.model.predict(prompt)
 
@@ -112,7 +92,7 @@ class ReportBuilder:
         logger.warning("🚩 Correcting JSON structure")
         logger.warning(report)
         prompt = load_prompt(
-            "prompts/4. validation_json.md",
+            "4. validation_json.md",
             validation=True,
             report=report,
         )
@@ -185,11 +165,11 @@ class ReportBuilder:
     def build(self, report_data: str) -> list[dict]:
         processing_steps = [
             (
-                "prompts/1. initial.md",
+                "1. initial.md",
                 "Дата, операция, культура",
                 True,
             ),
-            ("prompts/2. final.md", "Подразделение, вычисления", False),
+            ("2. final.md", "Подразделение, вычисления", False),
         ]
 
         result = report_data
@@ -199,7 +179,6 @@ class ReportBuilder:
 
         try:
             for item in result:
-                item["Дата"] = item["Дата"].strftime("%d.%m.%Y")
                 item["За день, га"] = item.pop("За_день_га")
                 item["С начала операции, га"] = item.pop("С_начала_операции_га")
                 item["Вал за день, ц"] = item.pop("Вал_за_день_ц")
