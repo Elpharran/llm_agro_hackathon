@@ -173,7 +173,6 @@ def manage_data():
         hide_index=True,
         disabled=['id']
     )
-
     if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
         changes = edited_df.compare(ss.df)
         updates = {}
@@ -198,8 +197,7 @@ def manage_data():
                 update_record_by_id(list(updates.keys()), list(updates.values()))
             st.success('Данные успешно обновлены', icon='✅')
             ss.df = edited_df
-    else:
-        st.info('Нет изменений для обновления.')
+
 
 if __name__ == "__main__":
     st.set_page_config(page_title="Отчёты", page_icon="🌾")
