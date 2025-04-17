@@ -1,10 +1,10 @@
 from db.connection import get_engine
-from logger_download import logger
+from bot.src.logger_download import logger
 from sqlalchemy import ( DateTime, Integer, MetaData, String)
 from sqlalchemy.orm import declarative_base, mapped_column
 from sqlalchemy.schema import CreateSchema
 
-SCHEMA_NAME = "llminteraction"
+SCHEMA_NAME = "reports"
 
 engine = get_engine()
 metadata = MetaData()
