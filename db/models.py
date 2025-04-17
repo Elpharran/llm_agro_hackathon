@@ -1,6 +1,6 @@
 from db.connection import get_engine
 from bot.src.logger_download import logger
-from sqlalchemy import ( DateTime, Integer, MetaData, String)
+from sqlalchemy import ( DateTime, Float, Integer, MetaData, String)
 from sqlalchemy.orm import declarative_base, mapped_column
 from sqlalchemy.schema import CreateSchema
 
@@ -22,8 +22,8 @@ class OperationInfo(Base):
     cultura = mapped_column(String(255), nullable=False)
     GA_per_day = mapped_column(Integer, nullable=False)
     GA_per_operation = mapped_column(Integer, nullable=False)
-    val_per_day = mapped_column(Integer, nullable=False)
-    val_per_operation = mapped_column(Integer, nullable=False)
+    val_per_day = mapped_column(Float, nullable=True, default=0)
+    val_per_operation = mapped_column(Float, nullable=False, default=0)
 
 
     def to_dict(self):
