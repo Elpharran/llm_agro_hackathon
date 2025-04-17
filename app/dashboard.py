@@ -2,18 +2,23 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import io
-from db.interaction import get_all_operations, update_record_by_id
 
 from streamlit import session_state as ss
 
-
-def load_data():
+# для демо дашборда
+try:
+    from db.interaction import get_all_operations, update_record_by_id
     ss.df = get_all_operations()
-    return ss.df
+    ss.demo = False
+except ModuleNotFoundError:
+    ss.demo = True
+    ss.df = pd.read_excel("app/примеры.xlsx")
+    ss.df["Дата"] = pd.to_datetime(ss.df["Дата"], dayfirst=True)
+    ss.df["id"] = range(len(ss.df))
+    ss.df = ss.df[[ss.df.columns.tolist()[-1]] + ss.df.columns.tolist()[:-1]]
 
 
 def load_session_state():
-    ss.df = load_data()
     ss.today = pd.to_datetime("today").normalize()
     if "start_date" not in ss:
         ss.start_date = ss.today
@@ -189,7 +194,8 @@ def manage_data():
                 updates[row_id] = new_values
 
         if updates:
-            update_record_by_id(list(updates.keys()), list(updates.values()))
+            if not ss.demo:
+                update_record_by_id(list(updates.keys()), list(updates.values()))
             st.success('Данные успешно обновлены', icon='✅')
             ss.df = edited_df
     else:
