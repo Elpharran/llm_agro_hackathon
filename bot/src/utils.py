@@ -9,9 +9,11 @@ import subprocess
 import tempfile
 import time
 import traceback
+import uuid
 from datetime import date
 from typing import Union
 
+import aio_pika
 import httpx
 import markdown
 import mistralai
@@ -23,7 +25,6 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import EasyOcrOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from dotenv import load_dotenv
-from mistral_common.protocol.instruct.request import ChatCompletionRequest
 from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 from mistralai import Mistral
 from src.image_utils import preprocess_image
@@ -33,8 +34,12 @@ from telegram.ext import CallbackContext, ContextTypes
 
 load_dotenv(override=True)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, 'configs')
+PROMPTS_PATH = os.path.join(BASE_DIR, 'prompts')
 UPLOAD_FOLDER = tempfile.gettempdir()
-with open("src/messages.json", "r", encoding="utf-8") as f:
+
+with open(os.path.join(CONFIG_PATH, 'messages.json'), "r", encoding="utf-8") as f:
     reply_messages = json.load(f)
 
 
@@ -162,93 +167,50 @@ class MistralAPIInference:
         messages.append(dict(role="system", content=self.system_prompt))
         messages.append(dict(role="user", content=user_prompt))
 
-        fit, tokens = self._check_tokens_fit(messages)
-
-        if tokens == 0:
-            raise RuntimeError("Выбранная модель более не доступна через API Mistral.")
-        if fit:
-            try:
-                prediction = (
-                    self.mistral_client.chat.complete(
-                        model=self.model,
-                        messages=messages,
-                        temperature=self.generation_params["temperature"],
-                    )
-                    .choices[0]
-                    .message.content
+        try:
+            prediction = (
+                self.mistral_client.chat.complete(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.generation_params["temperature"],
                 )
-                time.sleep(1)
-
-                return prediction
-            except mistralai.models.sdkerror.SDKError:
-                logger.warning("Rate limit exceeded. Sleeping for 60.")
-                time.sleep(60)
-                prediction = (
-                    self.mistral_client.chat.complete(
-                        model=self.model,
-                        messages=messages,
-                        temperature=self.generation_params["temperature"],
-                    )
-                    .choices[0]
-                    .message.content
-                )
-                return prediction
-            except requests.exceptions.HTTPError as http_err:
-                print(
-                    f"HTTP error occurred: {http_err.response.status_code} - {http_err.response.text}"
-                )
-                raise http_err
-            except Exception as e:
-                if isinstance(e, requests.exceptions.ConnectionError):
-                    print(f"Connection error occurred: {e}")
-                elif isinstance(e, requests.exceptions.Timeout):
-                    print(f"Request timed out: {e}")
-                else:
-                    print(f"An error occurred: {e}")
-                    traceback.print_exc()
-                raise e
-        else:
-            raise ValueError(
-                f"""Tokens count limit exceeded, consider cutting history or increasing
-    `max_context_length` parameter before making prediction.
-    Token count for current prompt: {tokens}"""
+                .choices[0]
+                .message.content
             )
+            time.sleep(1)
 
-    def _check_tokens_fit(self, messages):
-        """
-        Check if the token count of the generated prompt exceeds the model's context length limit.
-
-        Parameters
-        ----------
-        prompt : str
-            The prompt to be checked.
-
-        Raises
-        ------
-        ValueError
-            If the token count exceeds the model's context length.
-        """
-
-        if not self.is_dummy:
-            try:
-                tokenized = self.tokenizer_v3.encode_chat_completion(
-                    ChatCompletionRequest(messages=messages)
+            return prediction
+        except mistralai.models.sdkerror.SDKError:
+            logger.warning("Rate limit exceeded. Sleeping for 60.")
+            time.sleep(60)
+            prediction = (
+                self.mistral_client.chat.complete(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.generation_params["temperature"],
                 )
-                tokens, _ = tokenized.tokens, tokenized.text
-
-                tokencnt = len(tokens)
-                if tokencnt >= self.generation_params["max_tokens"]:
-                    return False, tokencnt
-                else:
-                    return True, tokencnt
-            except requests.exceptions.ConnectTimeout:
-                return False, "no response"
-        else:
-            return False, 0
+                .choices[0]
+                .message.content
+            )
+            return prediction
+        except requests.exceptions.HTTPError as http_err:
+            print(
+                f"HTTP error occurred: {http_err.response.status_code} - {http_err.response.text}"
+            )
+            raise http_err
+        except Exception as e:
+            if isinstance(e, requests.exceptions.ConnectionError):
+                print(f"Connection error occurred: {e}")
+            elif isinstance(e, requests.exceptions.Timeout):
+                print(f"Request timed out: {e}")
+            else:
+                print(f"An error occurred: {e}")
+                traceback.print_exc()
+            raise e
 
 
 def load_entities():
-    with open("src/allowed_entities.json", "r") as f:
+    with open(os.path.join(CONFIG_PATH, "allowed_entities.json"), "r") as f:
         entities = json.load(f)
 
     return entities
@@ -260,6 +222,93 @@ def get_reply_text(key):
     Keys and messages can be found in the messages.json.
     """
     return reply_messages[key]
+
+
+def markdown_to_string(file_path):
+    """
+    Reads a Markdown file and converts it into a formatted string.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            markdown_content = file.read()
+
+        html_content = markdown.markdown(markdown_content)
+
+        return html_content
+    except FileNotFoundError:
+        return "Error: File not found."
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def load_prompt(
+    prompt_path,
+    definition=False,
+    validation=False,
+    report=None,
+):
+    prompt_dir = os.path.join(PROMPTS_PATH, prompt_path)
+    entities = load_entities()
+    types = entities["type"]
+    culture = entities["culture"]
+    division = entities["division"]
+    subdivision = entities["subdivision"]
+    if definition:
+        today = date.today()
+        year = today.year
+        formatted_date = today.strftime("%d.%m.%Y")
+        return markdown_to_string(prompt_dir).format(
+            year=year,
+            date=formatted_date,
+            division=division + subdivision,
+            type=types,
+            culture=culture,
+        )
+    if validation:
+        return markdown_to_string(prompt_dir).format(
+            report=report, division=division, type=types, culture=culture
+        )
+    return markdown_to_string(prompt_dir)
+
+
+def clean_string(json_string):
+    cleaned_string = re.sub(r"```json|```", "", json_string)
+    cleaned_string = re.sub(r"\\n", "", cleaned_string)
+    cleaned_string = re.sub(r"\n", "", cleaned_string)
+    cleaned_string = re.sub(r"\s+", " ", cleaned_string)
+    cleaned_string = re.sub(r"\t", " ", cleaned_string)
+    cleaned_string = re.sub(r"\\t", " ", cleaned_string)
+    cleaned_string = re.sub(r'\\([^"\\/bfnrt])', r"\\\\\1", cleaned_string)
+    cleaned_string = re.sub(r"([}\]])\s*([{\[])", r"\1,\2", cleaned_string)
+    return cleaned_string.strip()
+
+async def send_and_receive(query_text):
+    connection = await aio_pika.connect_robust("amqp://guest:guest@rabbitmq/")
+    channel = await connection.channel()
+
+    callback_queue = await channel.declare_queue(exclusive=True)
+
+    future = asyncio.get_event_loop().create_future()
+    corr_id = str(uuid.uuid4())
+
+    async def on_response(message: aio_pika.IncomingMessage):
+        if message.correlation_id == corr_id:
+            future.set_result(json.loads(message.body.decode('utf-8')))
+
+    await callback_queue.consume(on_response)
+
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=query_text.encode(),
+            reply_to=callback_queue.name,
+            correlation_id=corr_id,
+        ),
+        routing_key="query_queue",
+    )
+
+    response = await future
+    await connection.close()
+    return response
 
 
 async def is_allowed(config, update: Update, context: CallbackContext) -> bool:
@@ -299,58 +348,6 @@ def is_admin(config, user_id: int, log_no_admin=False) -> bool:
         return True
 
     return False
-
-
-def markdown_to_string(file_path):
-    """
-    Reads a Markdown file and converts it into a formatted string.
-    """
-    try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            markdown_content = file.read()
-
-        html_content = markdown.markdown(markdown_content)
-
-        return html_content
-    except FileNotFoundError:
-        return "Error: File not found."
-    except Exception as e:
-        return f"Error: {e}"
-
-
-def load_prompt(
-    prompt_path,
-    definition=False,
-    validation=False,
-    report=None,
-):
-    if definition:
-        today = date.today()
-        year = today.year
-        entities = load_entities()
-        division = entities["division"]
-        subdivision = entities["subdivision"]
-        formatted_date = today.strftime("%d.%m.%Y")
-        return markdown_to_string(prompt_path).format(
-            year=year, date=formatted_date, division=division + subdivision
-        )
-    if validation:
-        return markdown_to_string(prompt_path).format(report=report)
-    return markdown_to_string(prompt_path)
-
-
-def clean_string(json_string):
-    cleaned_string = re.sub(r"```json|```", "", json_string)
-    cleaned_string = re.sub(r"\\n", "", cleaned_string)
-    cleaned_string = re.sub(r"\n", "", cleaned_string)
-    cleaned_string = re.sub(r"\s+", " ", cleaned_string)
-    cleaned_string = re.sub(r"\t", " ", cleaned_string)
-    cleaned_string = re.sub(r"\\t", " ", cleaned_string)
-    cleaned_string = re.sub(r'\\([^"\\/bfnrt])', r"\\\\\1", cleaned_string)
-    cleaned_string = re.sub(r"([}\]])\s*([{\[])", r"\1,\2", cleaned_string)
-    return cleaned_string.strip()
-
-
 def message_text(update: Update, reset=False) -> str:
     """
     Returns the text of a message, excluding any bot commands.
@@ -407,7 +404,9 @@ async def edit_message_with_retry(
             chat_id=chat_id,
             message_id=int(message_id),
             text=text,
-            parse_mode=constants.ParseMode.HTML if html else constants.ParseMode.MARKDOWN,
+            parse_mode=(
+                constants.ParseMode.HTML if html else constants.ParseMode.MARKDOWN
+            ),
             reply_markup=reply_markup,
         )
     except telegram.error.RetryAfter as e:
@@ -449,7 +448,7 @@ async def error_handler(_: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def manage_attachment(
-    model, update: Update, context: CallbackContext, file=None, photo=None
+    update: Update, context: CallbackContext, file=None, photo=None
 ):
     if file:
         file_name = file.file_name
@@ -476,11 +475,6 @@ async def manage_attachment(
 
     try:
         file_content = extract_file_content(file_path, file_extension)
-        if not model._check_tokens_fit([{"role": "user", "content": file_content}])[0]:
-            await update.message.reply_text(
-                "Загруженный файл слишком большой ⚠️ Модель не может его обработать."
-            )
-            return
 
         return file_content
 
