@@ -3,7 +3,7 @@ FROM python:3.10-slim
 WORKDIR /code
 COPY . /code/
 
-COPY requirements.bot.txt /code/
+COPY requirements.txt /code/
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH="${PYTHONPATH}:/code/bot"
@@ -14,7 +14,7 @@ RUN apt-get update && \
 
 RUN pip config set global.index-url https://pypi.org/simple
 
-RUN pip install --no-cache-dir -r /code/requirements.bot.txt
+RUN pip install --no-cache-dir -r /code/requirements.txt
 
 EXPOSE 8520 5672 15672
 
