@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: devops/app.DockerFile
+    container_name: agro_bot_container
+    ports:
+      - "8520:8520"
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      MISTRAL_API_KEYS: ${MISTRAL_API_KEYS}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS}
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS}
+      GROUP_CHAT_ID: ${GROUP_CHAT_ID}
+      PROXY_IP: ${PROXY_IP}
+      PROXY_PORT: ${PROXY_PORT}
+      PROXY_USERNAME: ${PROXY_PORT}
+      PROXY_PASSWORD: ${PROXY_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+      TZ: Europe/Moscow
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq_container
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      TZ: Europe/Moscow
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  worker_v1:
+    build:
+      context: .
+      dockerfile: devops/worker.DockerFile
+    container_name: worker_v1
+    environment:
+      TZ: Europe/Moscow
+    depends_on:
+      - rabbitmq
+    command: python bot/src/worker.py worker_v1
+
+  worker_v2:
+    build:
+      context: .
+      dockerfile: devops/worker.DockerFile
+    container_name: worker_v2
+    environment:
+      TZ: Europe/Moscow
+    depends_on:
+      - rabbitmq
+    command: python bot/src/worker.py worker_v2
+
+  db:
+    image: postgres:15
+    container_name: db_agro_container
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    ports:
+      - "5438:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  rabbitmq_data:
+  db_data:
