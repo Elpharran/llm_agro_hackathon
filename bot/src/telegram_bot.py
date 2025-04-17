@@ -177,7 +177,7 @@ class AgroReportTelegramBot:
                 entry_number = next_entry_idx + 1
                 await update.message.reply_text(
                     f"""Запись {entry_number}. Нераспознанные данные: ```
-{entries[entry_number]['Данные']}```
+{entries[next_entry_idx]['Данные']}```
 
 Введите значение для поля '{next_key}':""",
                     parse_mode=constants.ParseMode.MARKDOWN,
