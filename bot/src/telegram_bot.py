@@ -1,16 +1,17 @@
 from __future__ import annotations
+from datetime import datetime
 
 import pandas as pd
 from src.logger_download import logger
-from src.report_builder import ERROR_TEXT, ReportBuilder
+from src.report_builder import ERROR_TEXT
 from src.utils import (
-    MistralAPIInference,
     edit_message_with_retry,
     error_handler,
     get_reply_text,
     is_allowed,
     manage_attachment,
     message_text,
+    send_and_receive,
 )
 from telegram import (
     BotCommand,
@@ -29,29 +30,26 @@ from telegram.ext import (
     filters,
 )
 
+from db.interaction import insert_objects
+
 
 class AgroReportTelegramBot:
-    def __init__(self, builder: ReportBuilder):
+    def __init__(self, config):
         """
         Initializes the bot with the given configuration and LLM bot object.
         :param config: A dictionary containing the bot configuration
         :param openai: ReportBuilder object
         """
 
-        self.builder = builder
-        self.config = self.builder.config
-        self.model = MistralAPIInference(
-            config_path="src/configs/mistral_api.cfg.yml",
-            api_key=self.builder.config["mistral_api_key"],
-            proxy_url=None,
-        )
+        self.config = config
         self.commands = [
             BotCommand(
                 command="help",
                 description=get_reply_text("help_description"),
             ),
         ]
-        self.last_report = ""
+        self.last_report_data = ""
+        self.last_report = []
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -112,14 +110,13 @@ class AgroReportTelegramBot:
         await query.answer()
 
         if query.data == "final_yes":
-            corrected_entries = context.user_data.get("corrected_entries")
-            if corrected_entries is not None:
-
-                # TODO: сохранялка отчетов с обновленной даткой
-
-                pass
-
-            # TODO сохранялка отчетов обычная
+            corrected = context.user_data.get("corrected_entries")
+            if corrected:
+                self.last_report = corrected
+            self.last_report["Дата"] = datetime.strptime(
+                self.last_report["Дата"], "%d.%m.%Y"
+            )
+            insert_objects(self.last_report)
 
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
@@ -223,14 +220,14 @@ class AgroReportTelegramBot:
                 group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
     Исходный текст:
 
-    {self.last_report}"""
+    {self.last_report_data}"""
                 await context.bot.send_message(
                     chat_id=self.config["group_chat_id"],
                     text=group_report,
                     parse_mode=constants.ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
-                self.last_report = ""
+                self.last_report_data = ""
             return
 
         # Обработка входящих сообщений
@@ -249,9 +246,7 @@ class AgroReportTelegramBot:
                 "Файл обрабатывается 🤖", reply_to_message_id=update.message.message_id
             )
             try:
-                file_content = await manage_attachment(
-                    self.model, update, context, file, photo
-                )
+                file_content = await manage_attachment(update, context, file, photo)
                 logger.info(file_content)
                 query_text = f"""[ТАБЛИЦА]:\n{file_content}\n\n{query_text}"""
 
@@ -278,22 +273,22 @@ class AgroReportTelegramBot:
                 "Формирую отчёт 📝",
             )
 
-        self.last_report = query_text
-        response = self.builder.build(query_text)
+        self.last_report_data = query_text
+        self.last_report = await send_and_receive(query_text)
 
-        if response != ERROR_TEXT:
+        if self.last_report != ERROR_TEXT:
 
             logger.info("Report ready!")
             # Проверка на необходимость исправлений
             corrections_queue = []
-            for entry_idx, entry in enumerate(response):
+            for entry_idx, entry in enumerate(self.last_report):
                 for key, value in entry.items():
                     if value == "Не определено":
                         corrections_queue.append((entry_idx, key))
 
             if corrections_queue:
                 context.user_data["corrections"] = {
-                    "entries": response,
+                    "entries": self.last_report,
                     "queue": corrections_queue,
                     "current_index": 0,
                 }
@@ -303,7 +298,7 @@ class AgroReportTelegramBot:
                     f"""При заполнении отчёта не удалось распознать некоторые значения, требуется уточнение.
 
 Запись {first_entry_idx + 1}. Нераспознанные данные: ```
-{response[first_entry_idx]['Данные']}```
+{self.last_report[first_entry_idx]['Данные']}```
 
 Введите значение для поля '{first_key}':
 """,
@@ -313,10 +308,10 @@ class AgroReportTelegramBot:
 
             # Если исправления не требуются
             needs_val = False
-            for entry in response:
+            for entry in self.last_report:
                 if entry["Операция"] == "Уборка":
                     needs_val = True
-            for entry in response:
+            for entry in self.last_report:
                 entry.pop("Данные", None)
                 if not needs_val:
                     entry.pop("Вал с начала, ц", None)
@@ -326,7 +321,7 @@ class AgroReportTelegramBot:
                     entry["Вал за день, ц"] = entry["Вал за день, ц"] / 100
 
             formatted_report = (
-                f"<pre>{pd.DataFrame(response).to_string(index=False)}</pre>"
+                f"<pre>{pd.DataFrame(self.last_report).to_string(index=False)}</pre>"
             )
             keyboard = [
                 [
@@ -345,7 +340,7 @@ class AgroReportTelegramBot:
                 str(sent_message.message_id),
                 formatted_report,
                 reply_markup=reply_markup,
-                html=True
+                html=True,
             )
 
             group_report = f"""Отчёт от {update.effective_user.full_name}:\n\n{formatted_report}
@@ -363,10 +358,10 @@ class AgroReportTelegramBot:
                 context,
                 chat_id,
                 str(sent_message.message_id),
-                response,
+                self.last_report,
                 html=True,
             )
-        self.last_report = ""
+        self.last_report_data = ""
 
     async def post_init(self, application: Application) -> None:
         """
