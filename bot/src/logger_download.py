@@ -2,7 +2,7 @@ import logging
 import logging.config
 import yaml
 
-LOGGING_CFG_PATH = "src/configs/logging.cfg.yml"
+LOGGING_CFG_PATH = "bot/src/configs/logging.cfg.yml"
 
 
 def get_logger(logging_cfg_path: str = None) -> logging.Logger:
