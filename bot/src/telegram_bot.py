@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
+import re
 
 import pandas as pd
 from src.logger_download import logger
@@ -203,6 +204,7 @@ class AgroReportTelegramBot:
                 formatted_report = (
                     f"<pre>{pd.DataFrame(entries).to_string(index=False)}</pre>"
                 )
+                formatted_report = re.sub(r'<!--.*?-->', '', formatted_report, flags=re.DOTALL)
                 keyboard = [
                     [
                         InlineKeyboardButton(
