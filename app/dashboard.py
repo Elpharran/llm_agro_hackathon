@@ -2,16 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import io
+from db.interaction import get_all_operations, update_record_by_id
 
 from streamlit import session_state as ss
 
 
 def load_data():
-    ss.df = pd.read_excel("app/примеры.xlsx")
-    ss.df["Дата"] = pd.to_datetime(ss.df["Дата"], dayfirst=True)
-    ss.df["id"] = range(len(ss.df))
-    ss.df = ss.df[[ss.df.columns.tolist()[-1]] + ss.df.columns.tolist()[:-1]]
-    # ss.df = get_all_data()
+    ss.df = get_all_operations()
     return ss.df
 
 
@@ -158,65 +155,67 @@ def divisions_figure():
         fig_summary.update_layout(title_x=0.5, bargap=0.0, bargroupgap=0.0)
         st.plotly_chart(fig_summary, use_container_width=True)
 
+def manage_data():
+    st.markdown(
+        "**При необходимости изменения данных отредактируйте требуемые значения в ячейках таблицы**"
+    )
+
+    # Используем data_editor для редактирования
+    edited_df = st.data_editor(
+        ss.df,
+        use_container_width=True,
+        num_rows="fixed",
+        hide_index=True,
+        disabled=['id']
+    )
+
+    if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
+        changes = edited_df.compare(ss.df)
+        updates = {}
+
+        for idx in changes.index:
+            row_changes = changes.loc[idx]
+            new_values = {}
+
+            for col in edited_df.columns:
+                if (col, 'self') in row_changes and (col, 'other') in row_changes:
+                    new_value = row_changes[(col, 'self')]
+                    old_value = row_changes[(col, 'other')]
+                    if pd.notna(new_value) and new_value != old_value:
+                        new_values[col] = new_value
+
+            if new_values:
+                row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
+                updates[row_id] = new_values
+
+        if updates:
+            update_record_by_id(list(updates.keys()), list(updates.values()))
+            st.success('Данные успешно обновлены', icon='✅')
+            ss.df = edited_df
+    else:
+        st.info('Нет изменений для обновления.')
 
 if __name__ == "__main__":
     st.set_page_config(page_title="Отчёты", page_icon="🌾")
     st.title("📊 Отчётность")
     load_session_state()
-    create_sidebar()
-    tab1, tab2, tab3, tab4 = st.tabs(
-        [
-            "📝 Все данные",
-            "🌱 График по культурам",
-            "📌 График по операциям",
-            "🏢 График по подразделениям",
-        ]
-    )
-    with tab1:
-        st.markdown(
-            "**При необходимости изменения данных отредактируйте требуемые значения в ячейках таблицы**"
+    if not ss.df.empty:
+        create_sidebar()
+        tab1, tab2, tab3, tab4 = st.tabs(
+            [
+                "📝 Все данные",
+                "🌱 График по культурам",
+                "📌 График по операциям",
+                "🏢 График по подразделениям",
+            ]
         )
-
-        # Используем data_editor для редактирования
-        edited_df = st.data_editor(
-            ss.df,
-            use_container_width=True,
-            num_rows="fixed",
-            hide_index=True,
-            disabled=['id']
-        )
-
-        if st.button("**Обновить таблицу в Базе Данных**", type='primary'):
-            changes = edited_df.compare(ss.df)
-            updates = {}
-
-            for idx in changes.index:
-                row_changes = changes.loc[idx]
-                new_values = {}
-
-                for col in edited_df.columns:
-                    if (col, 'self') in row_changes and (col, 'other') in row_changes:
-                        new_value = row_changes[(col, 'self')]
-                        old_value = row_changes[(col, 'other')]
-                        if pd.notna(new_value) and new_value != old_value:
-                            new_values[col] = new_value
-
-                if new_values:
-                    row_id = int(edited_df.loc[idx, "id"])  # <-- приведение к int
-                    updates[row_id] = new_values
-
-            if updates:
-                #update_entry_by_ids(list(updates.keys()), list(updates.values()))
-                st.success('Данные успешно обновлены', icon='✅')
-                ss.df = edited_df
-        else:
-            st.info('Нет изменений для обновления.')
-
-
-
-    with tab2:
-        divisions_figure()
-    with tab3:
-        operations_figure()
-    with tab4:
-        cultures_figure()
+        with tab1:
+            manage_data()
+        with tab2:
+            divisions_figure()
+        with tab3:
+            operations_figure()
+        with tab4:
+            cultures_figure()
+    else:
+        st.warning('Данные в таблице отсутствуют.')
