@@ -105,6 +105,3 @@ docker-compose up --build
 
 Отправьте Pull Request
 
-##  📄 License
-MIT License © 2024 [Ваше имя/команда]
-
