@@ -30,13 +30,24 @@ cd agro-report-bot
 Создать .env файл в корне проекта:
 
 ```ini
-TELEGRAM_BOT_TOKEN=your_bot_token
-MISTRAL_API_KEY=your_api_key
-DB_URL=postgresql://user:password@host:port/dbname
+TELEGRAM_BOT_TOKEN='your telegram api token'
+MISTRAL_API_KEY='your mistral api key'
+ADMIN_USER_IDS='admin user ids'
+ALLOWED_TELEGRAM_USER_IDS='allowed user ids'
+GROUP_CHAT_ID='group chat id'
+PROXY_IP='proxy ip'
+PROXY_PORT='port'
+PROXY_USERNAME='username
+PROXY_PASSWORD='password'
+DATABASE_HOST='db host'
+DATABASE_PORT='db port
+DATABASE_USER='db user'
+DATABASE_PASSWORD='db password'
+DATABASE_NAME='db name'
 ```
 Настроить конфигурационные файлы:
 
-```bot/src/configs/mistral_api.cfg.yml``` - параметры API
+```bot/src/configs/mistral_api.cfg.yml``` - параметры API (рекомендуется оставить значения по умолчанию)
 
 ```bot/src/configs/allowed_entities.json```- список разрешенных сущностей
 
